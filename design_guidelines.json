@@ -1,0 +1,113 @@
+{
+  "theme": "Light",
+  "archetype": "Archetype 1: Organic & Earthy",
+  "rationale": "For an Indonesian family management app (Famly), a warm, organic, earthy aesthetic establishes trust (for finances) and approachability (for chores and family members). It leans into comfort and community rather than the cold, transactional nature of standard fintech/SaaS. Incorporating warm terracotta, sage green, and stone-grey establishes a welcoming, home-like environment.",
+  "colors": {
+    "background": {
+      "app": "#FAFAF9",
+      "admin": "#F5F5F4"
+    },
+    "surface": {
+      "default": "#FFFFFF",
+      "muted": "#F5F5F4",
+      "glass": "bg-white/80 backdrop-blur-xl border-stone-200 border"
+    },
+    "primary": {
+      "base": "#E07A5F",
+      "hover": "#D3644B",
+      "text": "#FFFFFF",
+      "description": "Warm Terracotta - Friendly, energetic, used for primary CTAs like 'Add Expense' and 'Upgrade Premium'."
+    },
+    "secondary": {
+      "base": "#81B29A",
+      "hover": "#6C9A84",
+      "text": "#FFFFFF",
+      "description": "Moss/Sage Green - For success states, tasks completed, free tier health (e.g., '10/30 expenses used')."
+    },
+    "accent": {
+      "base": "#F4A261",
+      "hover": "#E78E46",
+      "text": "#1C1917"
+    },
+    "text": {
+      "primary": "#1C1917",
+      "secondary": "#57534E",
+      "disabled": "#A8A29E"
+    },
+    "border": {
+      "default": "#E7E5E4",
+      "focus": "#E07A5F"
+    },
+    "danger": {
+      "base": "#EF4444",
+      "hover": "#DC2626"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Manrope",
+      "body": "Work Sans",
+      "mono": "JetBrains Mono"
+    },
+    "scale": {
+      "h1": "text-4xl sm:text-5xl tracking-tight leading-none font-bold",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-semibold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-medium",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm text-stone-500",
+      "overline": "text-xs uppercase tracking-[0.2em] font-semibold text-stone-500"
+    }
+  },
+  "spacing_and_layout": {
+    "philosophy": "Generous Spacing Philosophy. Use p-6, p-8 for cards to let content breathe. Avoid cramped layouts, especially on mobile devices where 'thumb-friendly' design is essential.",
+    "app_container": "max-w-md mx-auto min-h-screen bg-stone-50 shadow-xl overflow-hidden relative",
+    "admin_container": "max-w-full min-h-screen bg-stone-100 flex flex-col md:flex-row",
+    "card": "bg-white rounded-2xl border border-stone-200 shadow-sm p-6"
+  },
+  "components": {
+    "button": "rounded-xl font-medium transition-all duration-200 focus:ring-2 focus:ring-offset-2 focus:ring-[#E07A5F] disabled:opacity-50",
+    "input": "rounded-xl border-stone-200 bg-white focus:border-[#E07A5F] focus:ring-[#E07A5F] px-4 py-3",
+    "premium_modal": {
+      "style": "solid white background, p-8, rounded-3xl border border-[#E07A5F]/20 shadow-2xl relative overflow-hidden",
+      "features": "list of benefits with moss green checkmarks",
+      "cta": "w-full bg-[#E07A5F] text-white py-4 rounded-xl font-bold shadow-lg shadow-[#E07A5F]/30"
+    },
+    "limit_indicator": {
+      "style": "bg-stone-100 rounded-lg p-4 flex flex-col gap-2",
+      "progress_bar": "h-2 bg-stone-200 rounded-full overflow-hidden",
+      "progress_fill_safe": "bg-[#81B29A] h-full transition-all",
+      "progress_fill_warning": "bg-[#F4A261] h-full transition-all",
+      "progress_fill_danger": "bg-[#EF4444] h-full transition-all"
+    }
+  },
+  "motion": {
+    "hover": "-translate-y-0.5 shadow-md",
+    "active": "translate-y-0 shadow-sm scale-95",
+    "page_transition": "animate-in fade-in slide-in-from-bottom-4 duration-300"
+  },
+  "assets": {
+    "icons_library": "lucide-react",
+    "images": [
+      {
+        "category": "hero_illustration",
+        "url": "https://images.unsplash.com/photo-1593519544785-fd359b7068f1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHwyfHxpbmRvbmVzaWFuJTIwZmFtaWx5JTIwc21pbGluZ3xlbnwwfHx8fDE3ODEyNjk2NDV8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Smiling Indonesian family - use for the 'Welcome' or 'Join Family' hero section header."
+      },
+      {
+        "category": "premium_background",
+        "url": "https://images.unsplash.com/photo-1649083048770-82e8ffd80431?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjd8MHwxfHNlYXJjaHwyfHxjb3p5JTIwbW9kZXJuJTIwaG9tZSUyMGludGVyaW9yfGVufDB8fHx8MTc4MTI2OTY0NXww&ixlib=rb-4.1.0&q=85",
+        "description": "Cozy modern living room interior - use as a subtle overlay/background banner for the Premium Upgrade Modal to evoke domestic warmth."
+      }
+    ]
+  },
+  "accessibility_and_testing": {
+    "testing_attributes": "All interactive elements MUST have data-testid attributes (e.g., data-testid='upgrade-premium-button').",
+    "contrast": "Ensure white text on Terracotta meets 4.5:1 WCAG AA standards."
+  },
+  "admin_dashboard_specifics": {
+    "layout": "Control Room Grid (Dense, Functional, High clarity)",
+    "sidebar": "w-64 bg-stone-900 text-stone-300. Active states in white with Terracotta border-left accent.",
+    "metrics_cards": "bg-white p-6 border-l-4 border-[#81B29A] shadow-sm rounded-r-xl",
+    "data_table": "Dense rows, left-aligned. Use pill-shaped status badges (e.g., Active = bg-green-100 text-green-800, Suspended = bg-red-100 text-red-800)."
+  }
+}
