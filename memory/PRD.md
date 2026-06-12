@@ -37,6 +37,14 @@ Lanjutkan Famly: (1) Stripe Checkout asli untuk upgrade premium Rp 49.000/bln + 
 - [x] Indonesian UI throughout, IDR formatting (Rp 49.000)
 - [x] Testing: 25/25 backend pass, 12/12 frontend pass
 
+## PWA Installable Android/iOS (2026-06-12)
+- [x] Square icons dibuat: `/brand/icon-192.png`, `icon-512.png`, `icon-maskable-512.png`
+- [x] manifest.json diperbaiki (icons 192/512 + maskable, start_url `/app`, display standalone, id)
+- [x] sw.js + fetch handler (offline shell, network-first navigasi, cache-first static), ter-register global di index.js
+- [x] index.html: meta apple-mobile-web-app-capable/title/status-bar + apple-touch-icon
+- [x] Komponen `InstallPWA.jsx`: tombol prompt install (Android beforeinstallprompt) + modal instruksi iOS Safari. Dipasang di Landing & Dashboard
+- Tested: SW active, manifest & semua ikon served ✓. Tombol install hanya muncul di device asli yang memenuhi syarat.
+
 ## Push Notifications - Web Push native (2026-06-12)
 - [x] Native VAPID Web Push (pywebpush + APScheduler). Keys in backend/.env (VAPID_PRIVATE_KEY/PUBLIC_KEY/SUB_EMAIL)
 - [x] Endpoints: `GET /api/push/vapid-public-key`, `POST /api/push/subscribe`, `POST /api/push/unsubscribe`, `GET /api/push/status`, `POST /api/push/test`

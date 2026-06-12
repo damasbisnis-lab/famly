@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Check, Users, Receipt, ListChecks, Crown, ShieldCheck, Share2 } from "lucide-react";
 import api, { formatIDR } from "@/lib/api";
+import { InstallPWA } from "@/components/InstallPWA";
 
 function FeatureCard({ icon: Icon, title, desc, color, bg }) {
   return (
@@ -44,6 +45,7 @@ export default function Landing() {
               Saya sudah punya akun
             </Link>
           )}
+          <InstallPWA className="w-full" />
         </div>
         <div className="mt-4 text-xs text-stone-500 flex items-center justify-center gap-1.5">
           <ShieldCheck size={14} color="#7BA98A" /> Gratis untuk keluarga kecil

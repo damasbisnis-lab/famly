@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api, { formatApiError, formatIDR } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { PushToggle } from "@/components/PushToggle";
+import { InstallPWA } from "@/components/InstallPWA";
 import {
   Plus, Receipt, ListChecks, Crown, LogOut, Copy, Trash2, Check, Sparkles, ShieldAlert
 } from "lucide-react";
@@ -293,6 +294,10 @@ export default function Dashboard() {
 
       {info && <div className="mx-6 mb-3 text-sm rounded-xl p-3 bg-green-50 text-green-700 border border-green-100">{info}</div>}
       {err && <div className="mx-6 mb-3 text-sm rounded-xl p-3 bg-red-50 text-red-700 border border-red-100" data-testid="dashboard-error">{err}</div>}
+
+      <div className="px-6 mb-3">
+        <InstallPWA className="w-full" />
+      </div>
 
       {!family ? (
         <div className="px-6 space-y-4 fade-in">

@@ -3,14 +3,17 @@
   "name": "Famly - Harmonis, Seru, dan Tumbuh Bersama",
   "description": "Kelola keuangan & tugas keluarga dalam satu tempat.",
   "icons": [
-    { "src": "/brand/famly-logo.png", "type": "image/png", "sizes": "512x512" },
-    { "src": "/brand/famly-logo.png", "type": "image/png", "sizes": "192x192" }
+    { "src": "/brand/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "/brand/icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
   ],
-  "start_url": "/",
+  "start_url": "/app",
+  "id": "/",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#F08C3F",
   "background_color": "#FBF8F3",
   "lang": "id",
-  "scope": "/"
+  "scope": "/",
+  "categories": ["finance", "lifestyle", "productivity"]
 }
