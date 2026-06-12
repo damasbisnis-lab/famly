@@ -23,8 +23,7 @@ Lanjutkan Famly: (1) Stripe Checkout asli untuk upgrade premium Rp 49.000/bln + 
 - Suspended user: premium revoked + can read but not write
 
 ## Implemented (2026-06-12)
-- [x] Auth endpoints: `/api/auth/register`, `/login`, `/me`, `/logout`
-- [x] Idempotent admin seeding on startup (`admin@famly.id` / `admin123`)
+- [x] Auth endpoints: `/api/auth/register`, `/login`, `/me`, `/logout`- [x] Idempotent admin seeding on startup (`admin@famly.id` / `admin123`)
 - [x] Family create/join with invite code, member limit enforcement (FREE_LIMIT_MEMBERS=1)
 - [x] Expense CRUD with monthly limit enforcement (FREE_LIMIT_EXPENSES_MONTH=7)
 - [x] Task CRUD + toggle complete with active-task limit (FREE_LIMIT_TASKS_ACTIVE=5)
@@ -37,6 +36,14 @@ Lanjutkan Famly: (1) Stripe Checkout asli untuk upgrade premium Rp 49.000/bln + 
 - [x] Role-based routing in React Router (Protected component)
 - [x] Indonesian UI throughout, IDR formatting (Rp 49.000)
 - [x] Testing: 25/25 backend pass, 12/12 frontend pass
+
+## Push Notifications - Web Push native (2026-06-12)
+- [x] Native VAPID Web Push (pywebpush + APScheduler). Keys in backend/.env (VAPID_PRIVATE_KEY/PUBLIC_KEY/SUB_EMAIL)
+- [x] Endpoints: `GET /api/push/vapid-public-key`, `POST /api/push/subscribe`, `POST /api/push/unsubscribe`, `GET /api/push/status`, `POST /api/push/test`
+- [x] Scheduler per Indonesian timezone (WIB/WITA/WIT): task reminder 08:00 (tasks due today, not completed), finance reminder 20:00 (only if no expense logged that day)
+- [x] Frontend: `public/sw.js` service worker, `components/PushToggle.jsx` (enable/disable, tz select, test button) wired into Dashboard
+- [x] DB: `push_subscriptions` {user_id, endpoint, keys{p256dh,auth}, tz_label}
+- Tested: backend subscribe/status/test/unsubscribe via curl ✓. Browser permission + real delivery needs user device test.
 
 ## Backlog (P1)
 - Audit log collection for admin actions (admin_id + action + target + timestamp)

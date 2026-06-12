@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { formatApiError, formatIDR } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { PushToggle } from "@/components/PushToggle";
 import {
   Plus, Receipt, ListChecks, Crown, LogOut, Copy, Trash2, Check, Sparkles, ShieldAlert
 } from "lucide-react";
@@ -364,6 +365,9 @@ export default function Dashboard() {
               <Plus size={14}/> Ajak Anggota via WhatsApp
             </button>
           </div>
+
+          {/* Push notification reminders */}
+          <PushToggle />
 
           {/* Tabs */}
           <div className="flex gap-2 bg-stone-100 p-1 rounded-2xl">

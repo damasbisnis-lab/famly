@@ -5,12 +5,19 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 import os
+import json
 import uuid
+import asyncio
 import logging
 import bcrypt
 import jwt
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
+from zoneinfo import ZoneInfo
+
+from pywebpush import webpush, WebPushException
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -37,6 +44,17 @@ FREE_LIMIT_MEMBERS = int(os.environ.get('FREE_LIMIT_MEMBERS', 2))
 FREE_LIMIT_EXPENSES_MONTH = int(os.environ.get('FREE_LIMIT_EXPENSES_MONTH', 30))
 FREE_LIMIT_TASKS_ACTIVE = int(os.environ.get('FREE_LIMIT_TASKS_ACTIVE', 50))
 PREMIUM_PRICE_IDR = float(os.environ.get('PREMIUM_PRICE_IDR', 49000))
+
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_SUB_EMAIL = os.environ.get('VAPID_SUB_EMAIL', 'mailto:admin@famly.id')
+
+# 3 Indonesian timezones
+TIMEZONES = {
+    "WIB": "Asia/Jakarta",
+    "WITA": "Asia/Makassar",
+    "WIT": "Asia/Jayapura",
+}
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -1020,6 +1038,159 @@ async def admin_analytics(user: dict = Depends(require_admin)):
 
 
 # ============================================================================
+# PUSH NOTIFICATIONS (native Web Push / VAPID)
+# ============================================================================
+class PushKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class PushSubscribeReq(BaseModel):
+    endpoint: str
+    keys: PushKeys
+    tz_label: str = "WIB"
+
+
+class PushUnsubscribeReq(BaseModel):
+    endpoint: str
+
+
+@api.get("/push/vapid-public-key")
+async def push_vapid_public_key():
+    return {"public_key": VAPID_PUBLIC_KEY}
+
+
+@api.post("/push/subscribe")
+async def push_subscribe(req: PushSubscribeReq, user: dict = Depends(get_current_user)):
+    tz_label = req.tz_label if req.tz_label in TIMEZONES else "WIB"
+    doc = {
+        "user_id": user["id"],
+        "endpoint": req.endpoint,
+        "keys": {"p256dh": req.keys.p256dh, "auth": req.keys.auth},
+        "tz_label": tz_label,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.push_subscriptions.update_one(
+        {"endpoint": req.endpoint},
+        {"$set": doc, "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return {"ok": True, "tz_label": tz_label}
+
+
+@api.post("/push/unsubscribe")
+async def push_unsubscribe(req: PushUnsubscribeReq, user: dict = Depends(get_current_user)):
+    await db.push_subscriptions.delete_one({"endpoint": req.endpoint, "user_id": user["id"]})
+    return {"ok": True}
+
+
+@api.get("/push/status")
+async def push_status(user: dict = Depends(get_current_user)):
+    count = await db.push_subscriptions.count_documents({"user_id": user["id"]})
+    sub = await db.push_subscriptions.find_one({"user_id": user["id"]}, {"_id": 0, "tz_label": 1})
+    return {"subscribed": count > 0, "tz_label": sub.get("tz_label") if sub else "WIB"}
+
+
+def _send_webpush_sync(sub: dict, payload: dict):
+    """Blocking webpush call. Returns (ok, should_delete)."""
+    try:
+        webpush(
+            subscription_info={"endpoint": sub["endpoint"], "keys": sub["keys"]},
+            data=json.dumps(payload),
+            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims={"sub": VAPID_SUB_EMAIL},
+            ttl=86400,
+        )
+        return True, False
+    except WebPushException as e:
+        status = getattr(e.response, "status_code", None)
+        if status in (404, 410):
+            return False, True  # subscription expired/gone
+        logging.warning("webpush failed: %s", str(e))
+        return False, False
+    except Exception as e:
+        logging.warning("webpush error: %s", str(e))
+        return False, False
+
+
+async def _push_to_subs(subs: list, payload: dict):
+    sent = 0
+    for sub in subs:
+        ok, gone = await asyncio.to_thread(_send_webpush_sync, sub, payload)
+        if ok:
+            sent += 1
+        if gone:
+            await db.push_subscriptions.delete_one({"endpoint": sub["endpoint"]})
+    return sent
+
+
+@api.post("/push/test")
+async def push_test(user: dict = Depends(get_current_user)):
+    subs = await db.push_subscriptions.find({"user_id": user["id"]}, {"_id": 0}).to_list(20)
+    if not subs:
+        raise HTTPException(status_code=404, detail="Belum ada perangkat yang berlangganan notifikasi")
+    payload = {
+        "title": "Famly 🔔",
+        "body": "Notifikasi berhasil diaktifkan! Anda akan menerima pengingat tugas & keuangan.",
+        "url": "/",
+    }
+    sent = await _push_to_subs(subs, payload)
+    return {"ok": True, "sent": sent}
+
+
+async def send_task_reminders(tz_label: str, zone: str):
+    """8 AM local: remind users about tasks due today."""
+    today = datetime.now(ZoneInfo(zone)).strftime("%Y-%m-%d")
+    subs = await db.push_subscriptions.find({"tz_label": tz_label}, {"_id": 0}).to_list(5000)
+    for sub in subs:
+        u = await db.users.find_one({"id": sub["user_id"]}, {"_id": 0})
+        if not u or not u.get("family_id"):
+            continue
+        # Tasks due today in the family, not completed, assigned to them or unassigned
+        due = await db.tasks.count_documents({
+            "family_id": u["family_id"],
+            "due_date": today,
+            "completed": False,
+            "$or": [{"assigned_to": u["id"]}, {"assigned_to": None}],
+        })
+        if due <= 0:
+            continue
+        payload = {
+            "title": "Pengingat Tugas Hari Ini 📋",
+            "body": f"Kamu punya {due} tugas yang harus diselesaikan hari ini. Yuk cek di Famly!",
+            "url": "/",
+        }
+        ok, gone = await asyncio.to_thread(_send_webpush_sync, sub, payload)
+        if gone:
+            await db.push_subscriptions.delete_one({"endpoint": sub["endpoint"]})
+
+
+async def send_finance_reminders(tz_label: str, zone: str):
+    """8 PM local: remind users to log today's family finances."""
+    today = datetime.now(ZoneInfo(zone)).strftime("%Y-%m-%d")
+    subs = await db.push_subscriptions.find({"tz_label": tz_label}, {"_id": 0}).to_list(5000)
+    for sub in subs:
+        u = await db.users.find_one({"id": sub["user_id"]}, {"_id": 0})
+        if not u or not u.get("family_id"):
+            continue
+        # Only remind if no expense was recorded today (by created_at date prefix)
+        logged = await db.expenses.count_documents({
+            "family_id": u["family_id"],
+            "created_at": {"$regex": f"^{today}"},
+        })
+        if logged > 0:
+            continue
+        payload = {
+            "title": "Catat Keuangan Hari Ini 💰",
+            "body": "Jangan lupa catat pemasukan & pengeluaran keluarga hari ini di Famly.",
+            "url": "/",
+        }
+        ok, gone = await asyncio.to_thread(_send_webpush_sync, sub, payload)
+        if gone:
+            await db.push_subscriptions.delete_one({"endpoint": sub["endpoint"]})
+
+
+# ============================================================================
 # HEALTH
 # ============================================================================
 @api.get("/")
@@ -1043,6 +1214,8 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("famly")
 
+scheduler: Optional[AsyncIOScheduler] = None
+
 
 @app.on_event("startup")
 async def on_startup():
@@ -1057,6 +1230,9 @@ async def on_startup():
     await db.analytics_events.create_index([("event", 1), ("created_at", -1)])
     await db.upgrade_requests.create_index([("status", 1), ("created_at", -1)])
     await db.upgrade_requests.create_index("user_id")
+    await db.push_subscriptions.create_index("endpoint", unique=True)
+    await db.push_subscriptions.create_index("user_id")
+    await db.push_subscriptions.create_index("tz_label")
 
     # Seed admin idempotently
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
@@ -1085,7 +1261,27 @@ async def on_startup():
         elif existing.get("role") != "admin":
             await db.users.update_one({"email": ADMIN_EMAIL}, {"$set": {"role": "admin"}})
 
+    # Start push-notification scheduler (per Indonesian timezone)
+    if VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY:
+        global scheduler
+        scheduler = AsyncIOScheduler()
+        for label, zone in TIMEZONES.items():
+            scheduler.add_job(
+                send_task_reminders, CronTrigger(hour=8, minute=0, timezone=ZoneInfo(zone)),
+                args=[label, zone], id=f"task_reminder_{label}", replace_existing=True,
+            )
+            scheduler.add_job(
+                send_finance_reminders, CronTrigger(hour=20, minute=0, timezone=ZoneInfo(zone)),
+                args=[label, zone], id=f"finance_reminder_{label}", replace_existing=True,
+            )
+        scheduler.start()
+        logger.info("Push notification scheduler started for %s timezones", len(TIMEZONES))
+    else:
+        logger.warning("VAPID keys missing - push scheduler disabled")
+
 
 @app.on_event("shutdown")
 async def on_shutdown():
+    if scheduler and scheduler.running:
+        scheduler.shutdown(wait=False)
     client.close()
