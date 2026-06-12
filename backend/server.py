@@ -730,6 +730,43 @@ async def admin_transactions(user: dict = Depends(require_admin)):
 
 
 # ============================================================================
+# ANALYTICS - viral loop tracking
+# ============================================================================
+class TrackEventReq(BaseModel):
+    event: str = Field(min_length=1, max_length=50)
+    metadata: Optional[dict] = None
+
+
+@api.post("/track/event")
+async def track_event(req: TrackEventReq, request: Request):
+    """Public endpoint - logs analytics events (share clicks etc)."""
+    doc = {
+        "id": str(uuid.uuid4()),
+        "event": req.event.strip(),
+        "metadata": req.metadata or {},
+        "user_agent": request.headers.get("user-agent", "")[:200],
+        "referer": request.headers.get("referer", "")[:200],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.analytics_events.insert_one(doc)
+    return {"ok": True}
+
+
+@api.get("/admin/analytics")
+async def admin_analytics(user: dict = Depends(require_admin)):
+    """Aggregated event counts for admin."""
+    pipeline = [
+        {"$group": {"_id": "$event", "count": {"$sum": 1}, "last": {"$max": "$created_at"}}},
+        {"$sort": {"count": -1}},
+    ]
+    rows = await db.analytics_events.aggregate(pipeline).to_list(100)
+    events = [{"event": r["_id"], "count": r["count"], "last": r["last"]} for r in rows]
+    total = sum(e["count"] for e in events)
+    share_clicks = next((e["count"] for e in events if e["event"] == "share_clicked"), 0)
+    return {"events": events, "total": total, "share_clicks": share_clicks}
+
+
+# ============================================================================
 # HEALTH
 # ============================================================================
 @api.get("/")
@@ -764,6 +801,7 @@ async def on_startup():
     await db.expenses.create_index([("family_id", 1), ("month_key", 1)])
     await db.tasks.create_index([("family_id", 1), ("completed", 1)])
     await db.payment_transactions.create_index("session_id", unique=True)
+    await db.analytics_events.create_index([("event", 1), ("created_at", -1)])
 
     # Seed admin idempotently
     existing = await db.users.find_one({"email": ADMIN_EMAIL})

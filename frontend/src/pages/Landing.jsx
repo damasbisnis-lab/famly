@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Check, Users, Receipt, ListChecks, Crown, ShieldCheck, Share2 } from "lucide-react";
-import { formatIDR } from "@/lib/api";
+import api, { formatIDR } from "@/lib/api";
 
 function FeatureCard({ icon: Icon, title, desc, color, bg }) {
   return (
@@ -100,10 +100,20 @@ export default function Landing() {
         <button
           data-testid="share-whatsapp-btn"
           onClick={() => {
+            const url = window.location.origin;
             const text = encodeURIComponent(
-              "Coba Famly — aplikasi untuk catat pengeluaran & bagi tugas keluarga. Gratis untuk keluarga kecil 🏠 " +
-              window.location.origin
+              "Coba Famly — aplikasi untuk catat pengeluaran & bagi tugas keluarga. Gratis untuk keluarga kecil 🏠 " + url
             );
+            // Fire-and-forget analytics; don't block share
+            api.post("/track/event", {
+              event: "share_clicked",
+              metadata: {
+                channel: "whatsapp",
+                source: "landing_page",
+                logged_in: !!user,
+                user_id: user?.id || null,
+              },
+            }).catch(() => {});
             window.open(`https://wa.me/?text=${text}`, "_blank");
           }}
           className="w-full card-surface flex items-center justify-between"

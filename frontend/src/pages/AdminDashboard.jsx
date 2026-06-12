@@ -4,7 +4,7 @@ import api, { formatApiError, formatIDR } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
   Users, TrendingUp, DollarSign, ShieldOff, LogOut, Crown,
-  ArrowDownCircle, Ban, CheckCircle2, RefreshCw, Receipt
+  ArrowDownCircle, Ban, CheckCircle2, RefreshCw, Receipt, Share2
 } from "lucide-react";
 
 function StatCard({ icon: Icon, label, value, accent }) {
@@ -34,6 +34,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [subs, setSubs] = useState([]);
   const [txns, setTxns] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
@@ -42,14 +43,16 @@ export default function AdminDashboard() {
   const load = async () => {
     setLoading(true);
     try {
-      const [s, sub, t] = await Promise.all([
+      const [s, sub, t, a] = await Promise.all([
         api.get("/admin/stats"),
         api.get("/admin/subscribers"),
         api.get("/admin/transactions"),
+        api.get("/admin/analytics"),
       ]);
       setStats(s.data);
       setSubs(sub.data.subscribers);
       setTxns(t.data.transactions);
+      setAnalytics(a.data);
     } catch (e) {
       setErr(formatApiError(e));
     } finally {
@@ -124,11 +127,38 @@ export default function AdminDashboard() {
         {err && <div className="mb-4 text-sm rounded-xl p-3 bg-red-50 text-red-700 border border-red-100" data-testid="admin-error">{err}</div>}
 
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
             <StatCard icon={Users} label="Total User" value={stats.total_users} accent="#7BA98A" />
             <StatCard icon={TrendingUp} label="Active Subscribers" value={stats.active_subscribers} accent="#F08C3F" />
             <StatCard icon={DollarSign} label="MRR" value={formatIDR(stats.mrr_idr)} accent="#E8B341" />
             <StatCard icon={ShieldOff} label="Suspended" value={stats.suspended_users} accent="#DC4B4B" />
+            <StatCard icon={Share2} label="Share Clicks" value={analytics?.share_clicks ?? 0} accent="#2F7A7D" />
+          </div>
+        )}
+
+        {analytics && analytics.events.length > 0 && (
+          <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden mb-6">
+            <div className="px-6 py-4 border-b border-stone-200 font-bold flex items-center gap-2" style={{fontFamily:'Manrope'}}>
+              <Share2 size={16}/> Viral Loop Analytics
+            </div>
+            <table className="w-full text-sm" data-testid="analytics-table">
+              <thead className="bg-stone-50 text-stone-500 text-xs uppercase tracking-wider">
+                <tr>
+                  <th className="px-4 py-3 text-left">Event</th>
+                  <th className="px-4 py-3 text-right">Count</th>
+                  <th className="px-4 py-3 text-left">Last Triggered</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics.events.map((e) => (
+                  <tr key={e.event} className="border-t border-stone-100" data-testid={`analytics-row-${e.event}`}>
+                    <td className="px-4 py-3 font-mono text-xs">{e.event}</td>
+                    <td className="px-4 py-3 text-right font-bold">{e.count}</td>
+                    <td className="px-4 py-3 text-xs text-stone-500">{e.last ? new Date(e.last).toLocaleString('id-ID') : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 
