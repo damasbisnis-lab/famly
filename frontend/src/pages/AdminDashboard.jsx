@@ -69,7 +69,8 @@ export default function AdminDashboard() {
 
   useEffect(() => { load(); }, []);
 
-  const doAction = async (path, msg) => {
+  const doAction = async (path, msg, confirmMsg) => {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
     setErr(""); setInfo("");
     try {
       await api.post(path);
@@ -79,6 +80,17 @@ export default function AdminDashboard() {
     } catch (e) {
       setErr(formatApiError(e));
     }
+  };
+
+  const deleteUser = async (s) => {
+    if (!window.confirm(`PERMANEN: hapus user "${s.name}" (${s.email})? Semua data (family, tugas, transaksi) ikut terhapus. Lanjutkan?`)) return;
+    setErr(""); setInfo("");
+    try {
+      await api.delete(`/admin/users/${s.id}`);
+      setInfo(`${s.name} dihapus permanen`);
+      setTimeout(()=>setInfo(""), 2500);
+      await load();
+    } catch (e) { setErr(formatApiError(e)); }
   };
 
   if (!user) return null;
@@ -121,6 +133,13 @@ export default function AdminDashboard() {
             className={`w-full text-left px-3 py-2 rounded-lg ${tab==='settings' ? 'bg-stone-800 text-white border-l-4' : 'hover:bg-stone-800/50'}`}
             style={tab==='settings' ? {borderLeftColor:'#F08C3F'} : {}}>
             Pengaturan
+          </button>
+          <button
+            data-testid="admin-tab-account"
+            onClick={()=>setTab("account")}
+            className={`w-full text-left px-3 py-2 rounded-lg ${tab==='account' ? 'bg-stone-800 text-white border-l-4' : 'hover:bg-stone-800/50'}`}
+            style={tab==='account' ? {borderLeftColor:'#F08C3F'} : {}}>
+            Akun Admin
           </button>
         </nav>
         <button
@@ -219,14 +238,14 @@ export default function AdminDashboard() {
                           {s.premium_active && (
                             <button
                               data-testid={`downgrade-btn-${s.email}`}
-                              onClick={()=>doAction(`/admin/users/${s.id}/downgrade`, `${s.name} diturunkan ke Free`)}
+                              onClick={()=>doAction(`/admin/users/${s.id}/downgrade`, `${s.name} diturunkan ke Free`, `Turunkan ${s.name} ke Free? Premium akan dicabut.`)}
                               className="px-2.5 py-1.5 rounded-lg bg-stone-100 text-stone-700 text-xs font-semibold hover:bg-stone-200 flex items-center gap-1"
                             ><ArrowDownCircle size={12}/> Downgrade</button>
                           )}
                           {!s.suspended ? (
                             <button
                               data-testid={`suspend-btn-${s.email}`}
-                              onClick={()=>doAction(`/admin/users/${s.id}/suspend`, `${s.name} disuspend`)}
+                              onClick={()=>doAction(`/admin/users/${s.id}/suspend`, `${s.name} disuspend`, `Suspend ${s.name}? Premium akan dicabut & akun dibatasi.`)}
                               className="px-2.5 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100 flex items-center gap-1"
                             ><Ban size={12}/> Suspend</button>
                           ) : (
@@ -236,6 +255,11 @@ export default function AdminDashboard() {
                               className="px-2.5 py-1.5 rounded-lg bg-green-50 text-green-700 text-xs font-semibold hover:bg-green-100 flex items-center gap-1"
                             ><CheckCircle2 size={12}/> Aktifkan</button>
                           )}
+                          <button
+                            data-testid={`delete-btn-${s.email}`}
+                            onClick={()=>deleteUser(s)}
+                            className="px-2.5 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 flex items-center gap-1"
+                          ><XCircle size={12}/> Hapus</button>
                         </div>
                       </td>
                     </tr>
@@ -306,6 +330,59 @@ export default function AdminDashboard() {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {tab === "account" && (
+          <div className="bg-white rounded-2xl border border-stone-200 p-6 max-w-2xl space-y-6">
+            <div>
+              <h3 className="font-bold mb-3" style={{fontFamily:'Manrope'}}>Profil Saya</h3>
+              <form data-testid="admin-me-form" onSubmit={async (e)=>{
+                e.preventDefault();
+                const name = e.target.elements.name.value.trim();
+                const pw = e.target.elements.pw.value;
+                if (pw && !window.confirm("Ganti password admin? Sesi lain tetap aktif sampai logout.")) return;
+                if (!pw && name === user.name) { setErr("Tidak ada perubahan"); return; }
+                try {
+                  await api.put("/admin/me", { name, new_password: pw || null });
+                  setInfo("Profil diperbarui");
+                  setTimeout(()=>setInfo(""), 2500);
+                  e.target.elements.pw.value = "";
+                  await load();
+                } catch (e2) { setErr(formatApiError(e2)); }
+              }} className="space-y-3">
+                <div>
+                  <label className="text-sm font-semibold block mb-1">Nama</label>
+                  <input data-testid="admin-me-name" name="name" className="input-field" defaultValue={user.name} required />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold block mb-1">Password Baru</label>
+                  <input data-testid="admin-me-pw" name="pw" type="password" className="input-field" placeholder="Kosongkan jika tidak diubah" />
+                </div>
+                <button data-testid="admin-me-save" className="btn-primary" type="submit">Simpan</button>
+              </form>
+            </div>
+            <hr/>
+            <div>
+              <h3 className="font-bold mb-3" style={{fontFamily:'Manrope'}}>Tambah Admin Baru</h3>
+              <form data-testid="new-admin-form" onSubmit={async (e)=>{
+                e.preventDefault();
+                const f = e.target.elements;
+                if (!window.confirm(`Buat admin baru: ${f.email.value}? Akan punya akses penuh.`)) return;
+                try {
+                  await api.post("/admin/admins", { email: f.email.value, name: f.name.value, password: f.pw.value });
+                  setInfo("Admin baru ditambahkan");
+                  setTimeout(()=>setInfo(""), 2500);
+                  e.target.reset();
+                  await load();
+                } catch (e2) { setErr(formatApiError(e2)); }
+              }} className="space-y-3">
+                <input data-testid="new-admin-email" name="email" type="email" className="input-field" placeholder="email@famly.id" required />
+                <input data-testid="new-admin-name" name="name" className="input-field" placeholder="Nama admin" required />
+                <input data-testid="new-admin-pw" name="pw" type="password" minLength={6} className="input-field" placeholder="Password (min 6 karakter)" required />
+                <button data-testid="new-admin-submit" className="btn-secondary" type="submit">Tambah Admin</button>
+              </form>
+            </div>
           </div>
         )}
 

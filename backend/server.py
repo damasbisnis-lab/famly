@@ -734,6 +734,80 @@ async def admin_unsuspend(user_id: str, admin: dict = Depends(require_admin)):
     return {"ok": True}
 
 
+class AdminMeUpdateReq(BaseModel):
+    name: Optional[str] = None
+    new_password: Optional[str] = None
+
+
+class CreateAdminReq(BaseModel):
+    email: EmailStr
+    name: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=6)
+
+
+@api.put("/admin/me")
+async def admin_update_me(req: AdminMeUpdateReq, admin: dict = Depends(require_admin)):
+    update = {}
+    if req.name and req.name.strip():
+        update["name"] = req.name.strip()[:80]
+    if req.new_password:
+        if len(req.new_password) < 6:
+            raise HTTPException(status_code=400, detail="Password minimal 6 karakter")
+        update["password_hash"] = hash_password(req.new_password)
+    if not update:
+        raise HTTPException(status_code=400, detail="Tidak ada perubahan")
+    await db.users.update_one({"id": admin["id"]}, {"$set": update})
+    fresh = await db.users.find_one({"id": admin["id"]}, {"_id": 0})
+    return {"user": serialize_user(fresh)}
+
+
+@api.post("/admin/admins")
+async def admin_create_admin(req: CreateAdminReq, admin: dict = Depends(require_admin)):
+    email = req.email.lower().strip()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=400, detail="Email sudah terdaftar")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "email": email,
+        "name": req.name.strip(),
+        "password_hash": hash_password(req.password),
+        "role": "admin",
+        "is_premium": True,
+        "premium_until": (datetime.now(timezone.utc) + timedelta(days=3650)).isoformat(),
+        "suspended": False, "family_id": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.users.insert_one(doc)
+    doc.pop("_id", None); doc.pop("password_hash", None)
+    return {"user": serialize_user(doc)}
+
+
+@api.delete("/admin/users/{user_id}")
+async def admin_delete_user(user_id: str, admin: dict = Depends(require_admin)):
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="Tidak bisa menghapus akun sendiri")
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User tidak ditemukan")
+    # Cascade: hapus expenses, tasks user di keluarganya tetap, tapi family kalau dia owner di-hapus dari users
+    await db.users.delete_one({"id": user_id})
+    await db.upgrade_requests.delete_many({"user_id": user_id})
+    await db.expenses.delete_many({"user_id": user_id})
+    await db.tasks.delete_many({"user_id": user_id})
+    # Kalau owner family, family ikut hapus + lepas anggota lain
+    fam = await db.families.find_one({"owner_id": user_id})
+    if fam:
+        await db.users.update_many({"family_id": fam["id"]}, {"$set": {"family_id": None}})
+        await db.families.delete_one({"id": fam["id"]})
+    return {"ok": True}
+
+
+@api.get("/admin/admins")
+async def admin_list_admins(user: dict = Depends(require_admin)):
+    admins = await db.users.find({"role": "admin"}, {"_id": 0, "password_hash": 0}).to_list(100)
+    return {"admins": [serialize_user(a) for a in admins]}
+
+
 @api.get("/admin/transactions")
 async def admin_transactions(user: dict = Depends(require_admin)):
     txns = await db.payment_transactions.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
