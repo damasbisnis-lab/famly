@@ -72,11 +72,13 @@ class ExpenseCreateReq(BaseModel):
     amount: float = Field(gt=0)
     category: str = Field(min_length=1, max_length=40)
     description: str = Field(default="", max_length=200)
+    type: str = Field(default="expense")  # 'expense' or 'income'
 
 
 class TaskCreateReq(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     description: str = Field(default="", max_length=400)
+    assigned_to: Optional[str] = None  # user_id of family member
 
 
 class CheckoutReq(BaseModel):
@@ -349,6 +351,7 @@ async def create_expense(req: ExpenseCreateReq, user: dict = Depends(require_act
             )
 
     exp_id = str(uuid.uuid4())
+    txn_type = req.type if req.type in ("expense", "income") else "expense"
     doc = {
         "id": exp_id,
         "family_id": family_id,
@@ -357,6 +360,7 @@ async def create_expense(req: ExpenseCreateReq, user: dict = Depends(require_act
         "amount": req.amount,
         "category": req.category.strip(),
         "description": req.description.strip(),
+        "type": txn_type,
         "month_key": mk,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -400,6 +404,11 @@ async def create_task(req: TaskCreateReq, user: dict = Depends(require_active_us
             )
 
     task_id = str(uuid.uuid4())
+    assignee_name = None
+    if req.assigned_to:
+        member = await db.users.find_one({"id": req.assigned_to, "family_id": family_id}, {"_id": 0, "name": 1, "id": 1})
+        if member:
+            assignee_name = member["name"]
     doc = {
         "id": task_id,
         "family_id": family_id,
@@ -407,6 +416,8 @@ async def create_task(req: TaskCreateReq, user: dict = Depends(require_active_us
         "user_name": user["name"],
         "title": req.title.strip(),
         "description": req.description.strip(),
+        "assigned_to": req.assigned_to if assignee_name else None,
+        "assigned_to_name": assignee_name,
         "completed": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "completed_at": None,

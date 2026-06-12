@@ -118,7 +118,9 @@ export default function Dashboard() {
   const [expAmt, setExpAmt] = useState("");
   const [expCat, setExpCat] = useState("");
   const [expDesc, setExpDesc] = useState("");
+  const [expType, setExpType] = useState("expense");
   const [taskTitle, setTaskTitle] = useState("");
+  const [taskAssignee, setTaskAssignee] = useState("");
 
   const loadAll = async () => {
     try {
@@ -174,8 +176,9 @@ export default function Dashboard() {
         amount: parseFloat(expAmt),
         category: expCat,
         description: expDesc,
+        type: expType,
       });
-      setExpAmt(""); setExpCat(""); setExpDesc("");
+      setExpAmt(""); setExpCat(""); setExpDesc(""); setExpType("expense");
       await loadAll();
     } catch (e2) { handleErr(e2); }
   };
@@ -184,8 +187,8 @@ export default function Dashboard() {
     e.preventDefault();
     setErr("");
     try {
-      await api.post("/tasks", { title: taskTitle, description: "" });
-      setTaskTitle("");
+      await api.post("/tasks", { title: taskTitle, description: "", assigned_to: taskAssignee || null });
+      setTaskTitle(""); setTaskAssignee("");
       await loadAll();
     } catch (e2) { handleErr(e2); }
   };
@@ -345,12 +348,23 @@ export default function Dashboard() {
                 </span>
               ))}
             </div>
+            <button
+              data-testid="invite-member-btn"
+              onClick={()=>{
+                const msg = encodeURIComponent(`Yuk gabung ke keluarga "${family.name}" di Famly! Kode undangan: ${family.invite_code}\nDaftar: ${window.location.origin}`);
+                window.open(`https://wa.me/?text=${msg}`, "_blank");
+              }}
+              className="mt-3 w-full py-2 rounded-xl text-sm font-semibold border border-dashed flex items-center justify-center gap-2"
+              style={{borderColor:'#7BA98A', color:'#5F8E70'}}
+            >
+              <Plus size={14}/> Ajak Anggota via WhatsApp
+            </button>
           </div>
 
           {/* Tabs */}
           <div className="flex gap-2 bg-stone-100 p-1 rounded-2xl">
             <button data-testid="tab-expenses" onClick={()=>setTab("expenses")} className={`flex-1 py-2 rounded-xl text-sm font-semibold ${tab==='expenses' ? 'bg-white shadow-sm':'text-stone-600'}`}>
-              <Receipt size={14} className="inline mr-1"/> Pengeluaran
+              <Receipt size={14} className="inline mr-1"/> Keuangan
             </button>
             <button data-testid="tab-tasks" onClick={()=>setTab("tasks")} className={`flex-1 py-2 rounded-xl text-sm font-semibold ${tab==='tasks' ? 'bg-white shadow-sm':'text-stone-600'}`}>
               <ListChecks size={14} className="inline mr-1"/> Tugas
@@ -359,24 +373,52 @@ export default function Dashboard() {
 
           {tab === "expenses" && (
             <div className="card-surface fade-in">
-              <h3 className="font-bold mb-3" style={{fontFamily:'Manrope'}}>Tambah pengeluaran</h3>
+              <h3 className="font-bold mb-3" style={{fontFamily:'Manrope'}}>Tambah transaksi</h3>
               <form onSubmit={addExpense} className="space-y-2">
+                <div className="flex gap-2">
+                  <button type="button" data-testid="type-expense-btn" onClick={()=>setExpType("expense")} className={`flex-1 py-2 rounded-xl text-sm font-semibold border ${expType==='expense' ? 'bg-[#F08C3F] text-white border-[#F08C3F]':'border-stone-200 text-stone-600'}`}>Pengeluaran</button>
+                  <button type="button" data-testid="type-income-btn" onClick={()=>setExpType("income")} className={`flex-1 py-2 rounded-xl text-sm font-semibold border ${expType==='income' ? 'bg-[#7BA98A] text-white border-[#7BA98A]':'border-stone-200 text-stone-600'}`}>Pemasukan</button>
+                </div>
                 <input data-testid="expense-amount-input" type="number" min="1" step="any" className="input-field" placeholder="Jumlah (Rp)" value={expAmt} onChange={(e)=>setExpAmt(e.target.value)} required />
-                <input data-testid="expense-category-input" className="input-field" placeholder="Kategori (cth: Makanan)" value={expCat} onChange={(e)=>setExpCat(e.target.value)} required />
+                <input data-testid="expense-category-input" className="input-field" placeholder={expType==='income' ? 'Sumber (cth: Gaji)' : 'Kategori (cth: Makanan)'} value={expCat} onChange={(e)=>setExpCat(e.target.value)} required />
                 <input data-testid="expense-desc-input" className="input-field" placeholder="Deskripsi (opsional)" value={expDesc} onChange={(e)=>setExpDesc(e.target.value)} />
                 <button data-testid="expense-submit-btn" className="btn-primary w-full" type="submit"><Plus size={16} className="inline mr-1"/>Tambah</button>
               </form>
 
+              {(() => {
+                const income = expenses.filter(x=>x.type==='income').reduce((s,x)=>s+x.amount,0);
+                const out = expenses.filter(x=>x.type!=='income').reduce((s,x)=>s+x.amount,0);
+                return (
+                  <div className="grid grid-cols-3 gap-2 mt-4">
+                    <div className="rounded-xl p-2 text-center" style={{background:'rgba(123,169,138,0.15)'}}>
+                      <div className="text-[10px] text-stone-600">Pemasukan</div>
+                      <div className="text-sm font-bold" style={{color:'#5F8E70'}}>{formatIDR(income)}</div>
+                    </div>
+                    <div className="rounded-xl p-2 text-center" style={{background:'rgba(240,140,63,0.12)'}}>
+                      <div className="text-[10px] text-stone-600">Pengeluaran</div>
+                      <div className="text-sm font-bold" style={{color:'#DD7728'}}>{formatIDR(out)}</div>
+                    </div>
+                    <div className="rounded-xl p-2 text-center bg-stone-100">
+                      <div className="text-[10px] text-stone-600">Saldo</div>
+                      <div className="text-sm font-bold">{formatIDR(income-out)}</div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <h3 className="font-bold mt-6 mb-2" style={{fontFamily:'Manrope'}}>Riwayat</h3>
               <div className="space-y-2" data-testid="expenses-list">
-                {expenses.length === 0 && <div className="text-sm text-stone-500">Belum ada pengeluaran.</div>}
+                {expenses.length === 0 && <div className="text-sm text-stone-500">Belum ada transaksi.</div>}
                 {expenses.map((x) => (
                   <div key={x.id} className="flex items-start justify-between py-2 border-b border-stone-100 last:border-0">
                     <div>
-                      <div className="font-semibold">{x.category}</div>
+                      <div className="font-semibold flex items-center gap-1">
+                        {x.type==='income' && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{background:'rgba(123,169,138,0.18)',color:'#5F8E70'}}>+ Masuk</span>}
+                        {x.category}
+                      </div>
                       <div className="text-xs text-stone-500">{x.description || '—'} • {x.user_name}</div>
                     </div>
-                    <div className="font-bold" style={{color:'#F08C3F'}}>{formatIDR(x.amount)}</div>
+                    <div className="font-bold" style={{color: x.type==='income' ? '#5F8E70' : '#F08C3F'}}>{x.type==='income'?'+':'-'} {formatIDR(x.amount)}</div>
                   </div>
                 ))}
               </div>
@@ -386,9 +428,15 @@ export default function Dashboard() {
           {tab === "tasks" && (
             <div className="card-surface fade-in">
               <h3 className="font-bold mb-3" style={{fontFamily:'Manrope'}}>Tambah tugas</h3>
-              <form onSubmit={addTask} className="flex gap-2">
-                <input data-testid="task-title-input" className="input-field flex-1" placeholder="Judul tugas" value={taskTitle} onChange={(e)=>setTaskTitle(e.target.value)} required />
-                <button data-testid="task-submit-btn" className="btn-primary" type="submit"><Plus size={16}/></button>
+              <form onSubmit={addTask} className="space-y-2">
+                <input data-testid="task-title-input" className="input-field" placeholder="Judul tugas" value={taskTitle} onChange={(e)=>setTaskTitle(e.target.value)} required />
+                <select data-testid="task-assignee-select" className="input-field" value={taskAssignee} onChange={(e)=>setTaskAssignee(e.target.value)}>
+                  <option value="">— Untuk siapa saja —</option>
+                  {familyData?.members?.map((m)=>(
+                    <option key={m.id} value={m.id}>{m.name}{m.id===user.id?' (saya)':''}</option>
+                  ))}
+                </select>
+                <button data-testid="task-submit-btn" className="btn-primary w-full" type="submit"><Plus size={16} className="inline mr-1"/>Tambah Tugas</button>
               </form>
 
               <h3 className="font-bold mt-6 mb-2" style={{fontFamily:'Manrope'}}>Daftar tugas</h3>
@@ -404,7 +452,10 @@ export default function Dashboard() {
                       <span className={`w-5 h-5 rounded-md border flex items-center justify-center ${t.completed ? 'bg-[#7BA98A] border-[#7BA98A]' : 'border-stone-300'}`}>
                         {t.completed && <Check size={12} color="#fff" />}
                       </span>
-                      <span className={t.completed ? 'line-through text-stone-400':'text-stone-800'}>{t.title}</span>
+                      <span className="flex-1">
+                        <span className={t.completed ? 'line-through text-stone-400':'text-stone-800'}>{t.title}</span>
+                        {t.assigned_to_name && <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full" style={{background:'rgba(47,122,125,0.12)',color:'#2F7A7D'}}>→ {t.assigned_to_name}</span>}
+                      </span>
                     </button>
                     <button data-testid={`task-delete-${t.id}`} onClick={()=>deleteTask(t.id)} className="p-1 rounded hover:bg-red-50 text-red-500"><Trash2 size={14}/></button>
                   </div>
