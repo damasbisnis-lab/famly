@@ -122,6 +122,9 @@ export default function Dashboard() {
   const [taskTitle, setTaskTitle] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
   const [taskDue, setTaskDue] = useState("");
+  const [taskView, setTaskView] = useState("list"); // 'list' | 'calendar'
+  const [calMonth, setCalMonth] = useState(() => { const d=new Date(); return {y:d.getFullYear(), m:d.getMonth()}; });
+  const [calSelected, setCalSelected] = useState(null);
 
   const loadAll = async () => {
     try {
@@ -441,10 +444,65 @@ export default function Dashboard() {
                 <button data-testid="task-submit-btn" className="btn-primary w-full" type="submit"><Plus size={16} className="inline mr-1"/>Tambah Tugas</button>
               </form>
 
-              <h3 className="font-bold mt-6 mb-2" style={{fontFamily:'Manrope'}}>Daftar tugas</h3>
-              <div className="space-y-2" data-testid="tasks-list">
+              <h3 className="font-bold mt-6 mb-2 flex items-center justify-between" style={{fontFamily:'Manrope'}}>
+                <span>Daftar tugas</span>
+                <div className="flex gap-1 text-xs bg-stone-100 rounded-lg p-0.5">
+                  <button data-testid="task-view-list" onClick={()=>{setTaskView("list");setCalSelected(null);}} className={`px-2 py-1 rounded ${taskView==='list'?'bg-white shadow-sm font-semibold':''}`}>List</button>
+                  <button data-testid="task-view-calendar" onClick={()=>setTaskView("calendar")} className={`px-2 py-1 rounded ${taskView==='calendar'?'bg-white shadow-sm font-semibold':''}`}>📅 Kalender</button>
+                </div>
+              </h3>
+
+              {taskView === "calendar" && (() => {
+                const {y, m} = calMonth;
+                const first = new Date(y, m, 1);
+                const daysInMonth = new Date(y, m+1, 0).getDate();
+                const startDay = first.getDay(); // 0=Sun
+                const monthName = first.toLocaleDateString('id-ID',{month:'long',year:'numeric'});
+                const cells = [];
+                for (let i=0;i<startDay;i++) cells.push(null);
+                for (let d=1;d<=daysInMonth;d++) cells.push(d);
+                const todayIso = new Date().toISOString().slice(0,10);
+                const pad = (n)=>String(n).padStart(2,'0');
+                const tasksByDate = {};
+                tasks.forEach(t=>{ if(t.due_date){ tasksByDate[t.due_date]=(tasksByDate[t.due_date]||[]).concat(t); } });
+                const prevMonth = ()=>setCalMonth({y: m===0?y-1:y, m: m===0?11:m-1});
+                const nextMonth = ()=>setCalMonth({y: m===11?y+1:y, m: m===11?0:m+1});
+                return (
+                  <div data-testid="task-calendar">
+                    <div className="flex items-center justify-between mb-2">
+                      <button onClick={prevMonth} className="p-1 rounded hover:bg-stone-100">‹</button>
+                      <div className="font-semibold capitalize">{monthName}</div>
+                      <button onClick={nextMonth} className="p-1 rounded hover:bg-stone-100">›</button>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-stone-500 mb-1">
+                      {['Min','Sen','Sel','Rab','Kam','Jum','Sab'].map(d=><div key={d}>{d}</div>)}
+                    </div>
+                    <div className="grid grid-cols-7 gap-1">
+                      {cells.map((d,i)=>{
+                        if (d===null) return <div key={i}/>;
+                        const iso = `${y}-${pad(m+1)}-${pad(d)}`;
+                        const tList = tasksByDate[iso]||[];
+                        const isToday = iso===todayIso;
+                        const isSelected = calSelected===iso;
+                        const hasOverdue = tList.some(t=>!t.completed && iso<todayIso);
+                        return (
+                          <button key={i} data-testid={`cal-day-${iso}`} onClick={()=>setCalSelected(isSelected?null:iso)}
+                            className={`aspect-square rounded-lg border text-xs flex flex-col items-center justify-center relative ${isSelected?'bg-[#F08C3F] text-white border-[#F08C3F]':isToday?'border-[#F08C3F] bg-orange-50':'border-stone-200 hover:bg-stone-50'}`}>
+                            <span className="font-semibold">{d}</span>
+                            {tList.length>0 && <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${hasOverdue?'bg-red-500':isSelected?'bg-white':'bg-[#7BA98A]'}`}/>}
+                            {tList.length>1 && <span className="text-[8px]">{tList.length}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {calSelected && <div className="text-xs text-stone-600 mt-3">Tugas pada {new Date(calSelected).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})}:</div>}
+                  </div>
+                );
+              })()}
+
+              <div className="space-y-2 mt-3" data-testid="tasks-list">
                 {tasks.length === 0 && <div className="text-sm text-stone-500">Belum ada tugas.</div>}
-                {tasks.map((t) => (
+                {tasks.filter(t=>!calSelected || t.due_date===calSelected).map((t) => (
                   <div key={t.id} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
                     <button
                       data-testid={`task-toggle-${t.id}`}
