@@ -79,6 +79,7 @@ class TaskCreateReq(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     description: str = Field(default="", max_length=400)
     assigned_to: Optional[str] = None  # user_id of family member
+    due_date: Optional[str] = None  # ISO date YYYY-MM-DD
 
 
 class CheckoutReq(BaseModel):
@@ -418,6 +419,7 @@ async def create_task(req: TaskCreateReq, user: dict = Depends(require_active_us
         "description": req.description.strip(),
         "assigned_to": req.assigned_to if assignee_name else None,
         "assigned_to_name": assignee_name,
+        "due_date": req.due_date or None,
         "completed": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "completed_at": None,

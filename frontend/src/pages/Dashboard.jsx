@@ -121,6 +121,7 @@ export default function Dashboard() {
   const [expType, setExpType] = useState("expense");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
+  const [taskDue, setTaskDue] = useState("");
 
   const loadAll = async () => {
     try {
@@ -187,8 +188,8 @@ export default function Dashboard() {
     e.preventDefault();
     setErr("");
     try {
-      await api.post("/tasks", { title: taskTitle, description: "", assigned_to: taskAssignee || null });
-      setTaskTitle(""); setTaskAssignee("");
+      await api.post("/tasks", { title: taskTitle, description: "", assigned_to: taskAssignee || null, due_date: taskDue || null });
+      setTaskTitle(""); setTaskAssignee(""); setTaskDue("");
       await loadAll();
     } catch (e2) { handleErr(e2); }
   };
@@ -436,6 +437,7 @@ export default function Dashboard() {
                     <option key={m.id} value={m.id}>{m.name}{m.id===user.id?' (saya)':''}</option>
                   ))}
                 </select>
+                <input data-testid="task-due-input" type="date" className="input-field" value={taskDue} onChange={(e)=>setTaskDue(e.target.value)} />
                 <button data-testid="task-submit-btn" className="btn-primary w-full" type="submit"><Plus size={16} className="inline mr-1"/>Tambah Tugas</button>
               </form>
 
@@ -455,6 +457,12 @@ export default function Dashboard() {
                       <span className="flex-1">
                         <span className={t.completed ? 'line-through text-stone-400':'text-stone-800'}>{t.title}</span>
                         {t.assigned_to_name && <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full" style={{background:'rgba(47,122,125,0.12)',color:'#2F7A7D'}}>→ {t.assigned_to_name}</span>}
+                        {t.due_date && (() => {
+                          const today = new Date().toISOString().slice(0,10);
+                          const overdue = !t.completed && t.due_date < today;
+                          const dueToday = !t.completed && t.due_date === today;
+                          return <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full" style={{background: overdue?'#FEE2E2':dueToday?'rgba(232,179,65,0.2)':'rgba(123,169,138,0.15)', color: overdue?'#B91C1C':dueToday?'#9A6B0E':'#5F8E70'}}>📅 {new Date(t.due_date).toLocaleDateString('id-ID',{day:'numeric',month:'short'})}</span>;
+                        })()}
                       </span>
                     </button>
                     <button data-testid={`task-delete-${t.id}`} onClick={()=>deleteTask(t.id)} className="p-1 rounded hover:bg-red-50 text-red-500"><Trash2 size={14}/></button>
