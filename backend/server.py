@@ -775,45 +775,68 @@ async def admin_update_settings(req: SettingsUpdateReq, user: dict = Depends(req
 # UPGRADE REQUESTS (manual confirmation via WhatsApp)
 # ============================================================================
 @api.post("/payments/request-upgrade")
-async def request_upgrade(user: dict = Depends(require_active_user)):
-    """Create pending upgrade request. User contacts admin via WA to confirm payment."""
+async def request_upgrade(
+    proof_image: Optional[str] = None,
+    user: dict = Depends(require_active_user),
+):
+    """Create pending upgrade request with optional base64 proof image (max 2MB)."""
+    if proof_image and len(proof_image) > 2_800_000:  # ~2MB base64
+        raise HTTPException(status_code=413, detail="Bukti transfer terlalu besar (max 2MB)")
     settings = await _get_settings()
     wa = settings.get("admin_whatsapp", "")
     if not wa:
         raise HTTPException(status_code=503, detail="Nomor WhatsApp admin belum diatur. Hubungi tim Famly.")
-    # Check existing pending
     existing = await db.upgrade_requests.find_one({"user_id": user["id"], "status": "pending"}, {"_id": 0})
     if existing:
+        if proof_image:
+            await db.upgrade_requests.update_one({"id": existing["id"]}, {"$set": {"proof_image": proof_image}})
+            existing["proof_image"] = proof_image
         req_doc = existing
     else:
         req_id = str(uuid.uuid4())
         req_doc = {
-            "id": req_id,
-            "code": req_id[:8].upper(),
-            "user_id": user["id"],
-            "user_email": user["email"],
-            "user_name": user["name"],
-            "amount": PREMIUM_PRICE_IDR,
-            "currency": "idr",
-            "status": "pending",
+            "id": req_id, "code": req_id[:8].upper(),
+            "user_id": user["id"], "user_email": user["email"], "user_name": user["name"],
+            "amount": PREMIUM_PRICE_IDR, "currency": "idr", "status": "pending",
+            "proof_image": proof_image or "",
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "approved_at": None,
-            "approved_by": None,
+            "approved_at": None, "approved_by": None,
         }
         await db.upgrade_requests.insert_one(req_doc)
-    # Build WA link
-    msg = (
-        f"Halo Admin Famly,\n"
-        f"Saya ingin upgrade ke Premium.\n\n"
-        f"Nama: {user['name']}\n"
-        f"Email: {user['email']}\n"
-        f"Kode: {req_doc['code']}\n"
-        f"Nominal: Rp 49.000\n\n"
-        f"Mohon info cara pembayaran. Terima kasih!"
-    )
+    msg = (f"Halo Admin Famly,\nSaya ingin upgrade ke Premium.\n\nNama: {user['name']}\nEmail: {user['email']}\nKode: {req_doc['code']}\nNominal: Rp 49.000\n\nMohon info cara pembayaran. Terima kasih!")
     import urllib.parse
     wa_url = f"https://wa.me/{wa}?text={urllib.parse.quote(msg)}"
-    return {"request": req_doc, "wa_url": wa_url, "admin_whatsapp": wa, "bank_info": settings.get("bank_info", "")}
+    return {"request": {k:v for k,v in req_doc.items() if k!='proof_image'}, "wa_url": wa_url, "admin_whatsapp": wa, "bank_info": settings.get("bank_info", "")}
+
+
+class UpgradeRequestReq(BaseModel):
+    proof_image: Optional[str] = None
+
+
+@api.post("/payments/upload-proof")
+async def upload_proof(req: UpgradeRequestReq, user: dict = Depends(require_active_user)):
+    """Attach proof image to user's pending upgrade request."""
+    if not req.proof_image:
+        raise HTTPException(status_code=400, detail="Bukti transfer kosong")
+    if len(req.proof_image) > 2_800_000:
+        raise HTTPException(status_code=413, detail="Bukti transfer terlalu besar (max 2MB)")
+    existing = await db.upgrade_requests.find_one({"user_id": user["id"], "status": "pending"})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Tidak ada request upgrade aktif")
+    await db.upgrade_requests.update_one({"id": existing["id"]}, {"$set": {"proof_image": req.proof_image}})
+    return {"ok": True}
+
+
+@api.get("/admin/upgrade-requests/{req_id}/proof")
+async def admin_get_proof(req_id: str, user: dict = Depends(require_admin)):
+    req = await db.upgrade_requests.find_one({"id": req_id}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Tidak ditemukan")
+    return {"proof_image": req.get("proof_image", ""), "code": req.get("code")}
+async def my_upgrade_request(user: dict = Depends(get_current_user)):
+    """In-app notification: user checks their latest request status."""
+    req = await db.upgrade_requests.find_one({"user_id": user["id"]}, {"_id": 0, "proof_image": 0}, sort=[("created_at", -1)])
+    return {"request": req}
 
 
 @api.get("/admin/upgrade-requests")
