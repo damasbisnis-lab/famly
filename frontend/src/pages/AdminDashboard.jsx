@@ -37,6 +37,7 @@ export default function AdminDashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [upgradeReqs, setUpgradeReqs] = useState([]);
   const [settings, setSettings] = useState({admin_whatsapp: "", bank_info: ""});
+  const [proofView, setProofView] = useState(null); // {code, image}
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
@@ -271,8 +272,19 @@ export default function AdminDashboard() {
                     <td className="px-4 py-3 text-xs text-stone-500">{new Date(r.created_at).toLocaleString('id-ID')}</td>
                     <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${r.status==='approved'?'bg-green-100 text-green-800':r.status==='rejected'?'bg-red-100 text-red-800':'bg-yellow-100 text-yellow-800'}`}>{r.status}</span></td>
                     <td className="px-4 py-3 text-right">
+                      <div className="flex gap-1 justify-end items-center">
+                      <button
+                        data-testid={`view-proof-${r.code}`}
+                        onClick={async ()=>{
+                          try {
+                            const { data } = await api.get(`/admin/upgrade-requests/${r.id}/proof`);
+                            setProofView({ code: data.code, image: data.proof_image });
+                          } catch (e) { setErr(formatApiError(e)); }
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-stone-100 text-stone-700 text-xs font-semibold hover:bg-stone-200"
+                      >Lihat Bukti</button>
                       {r.status === 'pending' && (
-                        <div className="flex gap-1 justify-end">
+                        <>
                           <button
                             data-testid={`approve-req-${r.code}`}
                             onClick={()=>doAction(`/admin/upgrade-requests/${r.id}/approve`, `Request ${r.code} disetujui & user di-upgrade ke Premium`)}
@@ -283,8 +295,9 @@ export default function AdminDashboard() {
                             onClick={()=>doAction(`/admin/upgrade-requests/${r.id}/reject`, `Request ${r.code} ditolak`)}
                             className="px-2.5 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-semibold flex items-center gap-1"
                           ><XCircle size={12}/> Tolak</button>
-                        </div>
+                        </>
                       )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -372,6 +385,22 @@ export default function AdminDashboard() {
           </div>
         )}
       </main>
+
+      {proofView && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={()=>setProofView(null)} data-testid="proof-modal">
+          <div className="bg-white rounded-2xl p-4 max-w-2xl w-full" onClick={(e)=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-bold" style={{fontFamily:'Manrope'}}>Bukti Transfer - {proofView.code}</div>
+              <button onClick={()=>setProofView(null)} className="text-stone-500 hover:text-stone-800">✕</button>
+            </div>
+            {proofView.image ? (
+              <img src={proofView.image} alt="Bukti transfer" className="w-full rounded-lg" data-testid="proof-image" />
+            ) : (
+              <div className="text-center py-8 text-stone-500">User belum mengunggah bukti transfer.</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

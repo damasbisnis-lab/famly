@@ -833,6 +833,17 @@ async def admin_get_proof(req_id: str, user: dict = Depends(require_admin)):
     if not req:
         raise HTTPException(status_code=404, detail="Tidak ditemukan")
     return {"proof_image": req.get("proof_image", ""), "code": req.get("code")}
+
+
+@api.get("/payments/my-request")
+async def my_upgrade_request(user: dict = Depends(get_current_user)):
+    """In-app notification: user checks their latest request status."""
+    req = await db.upgrade_requests.find_one(
+        {"user_id": user["id"]},
+        {"_id": 0, "proof_image": 0},
+        sort=[("created_at", -1)],
+    )
+    return {"request": req}
 async def my_upgrade_request(user: dict = Depends(get_current_user)):
     """In-app notification: user checks their latest request status."""
     req = await db.upgrade_requests.find_one({"user_id": user["id"]}, {"_id": 0, "proof_image": 0}, sort=[("created_at", -1)])

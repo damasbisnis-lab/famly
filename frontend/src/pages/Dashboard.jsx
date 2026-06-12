@@ -30,8 +30,14 @@ function LimitBar({ label, used, max }) {
   );
 }
 
-function UpgradeModal({ open, onClose, onUpgrade, loading }) {
+function UpgradeModal({ open, onClose, onUpgrade, loading, proofFile, setProofFile }) {
   if (!open) return null;
+  const onFileChange = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { alert("Maksimal 2MB"); return; }
+    setProofFile(f);
+  };
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center px-4 fade-in" onClick={onClose}>
       <div
@@ -64,6 +70,17 @@ function UpgradeModal({ open, onClose, onUpgrade, loading }) {
               </li>
             ))}
           </ul>
+          <div className="mb-4 p-3 rounded-xl border border-stone-200 bg-stone-50">
+            <label className="text-xs font-semibold text-stone-700 block mb-2">Bukti transfer (opsional, max 2MB)</label>
+            <input
+              data-testid="proof-file-input"
+              type="file"
+              accept="image/*"
+              onChange={onFileChange}
+              className="text-xs w-full"
+            />
+            {proofFile && <div className="text-xs text-green-700 mt-1">✓ {proofFile.name}</div>}
+          </div>
           <button
             data-testid="upgrade-confirm-btn"
             className="btn-primary w-full"
@@ -90,6 +107,8 @@ export default function Dashboard() {
   const [info, setInfo] = useState("");
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const [proofFile, setProofFile] = useState(null);
+  const [myReq, setMyReq] = useState(null);
 
   const [famName, setFamName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -100,14 +119,16 @@ export default function Dashboard() {
 
   const loadAll = async () => {
     try {
-      const [f, e, t] = await Promise.all([
+      const [f, e, t, mr] = await Promise.all([
         api.get("/families/me"),
         api.get("/expenses"),
         api.get("/tasks"),
+        api.get("/payments/my-request").catch(()=>({data:{request:null}})),
       ]);
       setFamilyData(f.data);
       setExpenses(e.data.expenses || []);
       setTasks(t.data.tasks || []);
+      setMyReq(mr.data.request);
     } catch (e2) {
       setErr(formatApiError(e2));
     }
@@ -181,10 +202,21 @@ export default function Dashboard() {
     setErr("");
     try {
       const { data } = await api.post("/payments/request-upgrade");
-      // Open WhatsApp in new tab; user confirms payment with admin manually
+      // Upload proof if attached
+      if (proofFile) {
+        const b64 = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result);
+          r.onerror = rej;
+          r.readAsDataURL(proofFile);
+        });
+        await api.post("/payments/upload-proof", { proof_image: b64 });
+      }
       window.open(data.wa_url, "_blank");
-      handleInfo("Lanjutkan chat di WhatsApp untuk konfirmasi pembayaran.");
+      handleInfo("Permintaan dikirim. Lanjutkan chat WhatsApp untuk konfirmasi.");
       setShowUpgrade(false);
+      setProofFile(null);
+      await loadAll();
     } catch (e2) {
       handleErr(e2);
     } finally {
@@ -229,6 +261,22 @@ export default function Dashboard() {
             <div className="font-semibold text-red-800">Akun disuspend</div>
             <div className="text-red-700">Anda hanya dapat melihat data, tidak bisa menambah/mengubah.</div>
           </div>
+        </div>
+      )}
+
+      {myReq && myReq.status === "pending" && (
+        <div className="mx-6 mb-3 rounded-2xl p-3 bg-yellow-50 border border-yellow-200 text-xs" data-testid="request-status-banner">
+          ⏳ Permintaan upgrade <b>{myReq.code}</b> menunggu konfirmasi admin via WhatsApp.
+        </div>
+      )}
+      {myReq && myReq.status === "approved" && !isPremium && (
+        <div className="mx-6 mb-3 rounded-2xl p-3 bg-green-50 border border-green-200 text-xs" data-testid="request-status-banner">
+          ✓ Permintaan <b>{myReq.code}</b> disetujui. Refresh untuk update status Premium.
+        </div>
+      )}
+      {myReq && myReq.status === "rejected" && (
+        <div className="mx-6 mb-3 rounded-2xl p-3 bg-red-50 border border-red-200 text-xs" data-testid="request-status-banner">
+          ✕ Permintaan <b>{myReq.code}</b> ditolak. Hubungi admin untuk info lebih lanjut.
         </div>
       )}
 
@@ -383,11 +431,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <UpgradeModal open={showUpgrade} onClose={()=>setShowUpgrade(false)} onUpgrade={initiateUpgrade} loading={upgrading} />
-    </div>
-  );
-}
-de} loading={upgrading} />
+      <UpgradeModal open={showUpgrade} onClose={()=>setShowUpgrade(false)} onUpgrade={initiateUpgrade} loading={upgrading} proofFile={proofFile} setProofFile={setProofFile} />
     </div>
   );
 }
