@@ -4,6 +4,7 @@ import api, { formatApiError, formatIDR } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { PushToggle } from "@/components/PushToggle";
 import { InstallPWA } from "@/components/InstallPWA";
+import { WelcomeBanner } from "@/components/WelcomeBanner";
 import {
   Plus, Receipt, ListChecks, Crown, LogOut, Copy, Trash2, Check, Sparkles, ShieldAlert
 } from "lucide-react";
@@ -124,6 +125,7 @@ export default function Dashboard() {
   const [taskTitle, setTaskTitle] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
   const [taskDue, setTaskDue] = useState("");
+  const [taskTime, setTaskTime] = useState("");
   const [taskView, setTaskView] = useState("list"); // 'list' | 'calendar'
   const [calMonth, setCalMonth] = useState(() => { const d=new Date(); return {y:d.getFullYear(), m:d.getMonth()}; });
   const [calSelected, setCalSelected] = useState(null);
@@ -193,8 +195,8 @@ export default function Dashboard() {
     e.preventDefault();
     setErr("");
     try {
-      await api.post("/tasks", { title: taskTitle, description: "", assigned_to: taskAssignee || null, due_date: taskDue || null });
-      setTaskTitle(""); setTaskAssignee(""); setTaskDue("");
+      await api.post("/tasks", { title: taskTitle, description: "", assigned_to: taskAssignee || null, due_date: taskDue || null, due_time: (taskDue && taskTime) ? taskTime : null });
+      setTaskTitle(""); setTaskAssignee(""); setTaskDue(""); setTaskTime("");
       await loadAll();
     } catch (e2) { handleErr(e2); }
   };
@@ -298,6 +300,8 @@ export default function Dashboard() {
       <div className="px-6 mb-3">
         <InstallPWA className="w-full" />
       </div>
+
+      <WelcomeBanner />
 
       {!family ? (
         <div className="px-6 space-y-4 fade-in">
@@ -450,6 +454,12 @@ export default function Dashboard() {
                   ))}
                 </select>
                 <input data-testid="task-due-input" type="date" className="input-field" value={taskDue} onChange={(e)=>setTaskDue(e.target.value)} />
+                {taskDue && (
+                  <div className="flex items-center gap-2">
+                    <input data-testid="task-time-input" type="time" className="input-field" value={taskTime} onChange={(e)=>setTaskTime(e.target.value)} placeholder="Jam (opsional)" />
+                    <span className="text-xs text-stone-500 whitespace-nowrap">Jam (opsional)</span>
+                  </div>
+                )}
                 <button data-testid="task-submit-btn" className="btn-primary w-full" type="submit"><Plus size={16} className="inline mr-1"/>Tambah Tugas</button>
               </form>
 
@@ -528,7 +538,7 @@ export default function Dashboard() {
                           const today = new Date().toISOString().slice(0,10);
                           const overdue = !t.completed && t.due_date < today;
                           const dueToday = !t.completed && t.due_date === today;
-                          return <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full" style={{background: overdue?'#FEE2E2':dueToday?'rgba(232,179,65,0.2)':'rgba(123,169,138,0.15)', color: overdue?'#B91C1C':dueToday?'#9A6B0E':'#5F8E70'}}>📅 {new Date(t.due_date).toLocaleDateString('id-ID',{day:'numeric',month:'short'})}</span>;
+                          return <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full" style={{background: overdue?'#FEE2E2':dueToday?'rgba(232,179,65,0.2)':'rgba(123,169,138,0.15)', color: overdue?'#B91C1C':dueToday?'#9A6B0E':'#5F8E70'}}>📅 {new Date(t.due_date).toLocaleDateString('id-ID',{day:'numeric',month:'short'})}{t.due_time?` • ${t.due_time}`:''}</span>;
                         })()}
                       </span>
                     </button>

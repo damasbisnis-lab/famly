@@ -98,6 +98,7 @@ class TaskCreateReq(BaseModel):
     description: str = Field(default="", max_length=400)
     assigned_to: Optional[str] = None  # user_id of family member
     due_date: Optional[str] = None  # ISO date YYYY-MM-DD
+    due_time: Optional[str] = None  # HH:MM (24h), optional
 
 
 class CheckoutReq(BaseModel):
@@ -447,7 +448,9 @@ async def create_task(req: TaskCreateReq, user: dict = Depends(require_active_us
         "assigned_to": req.assigned_to if assignee_name else None,
         "assigned_to_name": assignee_name,
         "due_date": req.due_date or None,
+        "due_time": (req.due_time or None) if req.due_date else None,
         "completed": False,
+        "notified_users": [],
         "created_at": datetime.now(timezone.utc).isoformat(),
         "completed_at": None,
     }
@@ -1072,6 +1075,76 @@ class PushUnsubscribeReq(BaseModel):
     endpoint: str
 
 
+DEFAULT_REMINDER_PREFS = {
+    "task_reminder_enabled": True,
+    "task_summary_time": "08:00",   # daily summary for all-day tasks (no specific time)
+    "task_lead_minutes": 30,         # notify N minutes before a timed task
+    "finance_reminder_enabled": True,
+    "finance_reminder_time": "20:00",
+    "tz_label": "WIB",
+}
+
+
+def _valid_hm(s: str) -> bool:
+    try:
+        h, m = s.split(":")
+        return 0 <= int(h) <= 23 and 0 <= int(m) <= 59 and len(h) == 2 and len(m) == 2
+    except Exception:
+        return False
+
+
+def get_reminder_prefs(user: dict) -> dict:
+    prefs = dict(DEFAULT_REMINDER_PREFS)
+    rp = user.get("reminder_prefs") or {}
+    for k in DEFAULT_REMINDER_PREFS:
+        if k in rp and rp[k] is not None:
+            prefs[k] = rp[k]
+    if user.get("tz_label") in TIMEZONES:
+        prefs["tz_label"] = user["tz_label"]
+    return prefs
+
+
+class ReminderPrefsReq(BaseModel):
+    task_reminder_enabled: Optional[bool] = None
+    task_summary_time: Optional[str] = None
+    task_lead_minutes: Optional[int] = None
+    finance_reminder_enabled: Optional[bool] = None
+    finance_reminder_time: Optional[str] = None
+    tz_label: Optional[str] = None
+
+
+@api.get("/push/preferences")
+async def get_push_preferences(user: dict = Depends(get_current_user)):
+    return {"preferences": get_reminder_prefs(user)}
+
+
+@api.put("/push/preferences")
+async def update_push_preferences(req: ReminderPrefsReq, user: dict = Depends(get_current_user)):
+    rp = dict(user.get("reminder_prefs") or {})
+    if req.task_reminder_enabled is not None:
+        rp["task_reminder_enabled"] = req.task_reminder_enabled
+    if req.finance_reminder_enabled is not None:
+        rp["finance_reminder_enabled"] = req.finance_reminder_enabled
+    if req.task_summary_time is not None:
+        if not _valid_hm(req.task_summary_time):
+            raise HTTPException(status_code=400, detail="Format waktu tugas tidak valid (HH:MM)")
+        rp["task_summary_time"] = req.task_summary_time
+    if req.finance_reminder_time is not None:
+        if not _valid_hm(req.finance_reminder_time):
+            raise HTTPException(status_code=400, detail="Format waktu keuangan tidak valid (HH:MM)")
+        rp["finance_reminder_time"] = req.finance_reminder_time
+    if req.task_lead_minutes is not None:
+        if req.task_lead_minutes < 0 or req.task_lead_minutes > 1440:
+            raise HTTPException(status_code=400, detail="Lead time harus antara 0-1440 menit")
+        rp["task_lead_minutes"] = req.task_lead_minutes
+    set_doc = {"reminder_prefs": rp}
+    if req.tz_label is not None and req.tz_label in TIMEZONES:
+        set_doc["tz_label"] = req.tz_label
+    await db.users.update_one({"id": user["id"]}, {"$set": set_doc})
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return {"preferences": get_reminder_prefs(fresh)}
+
+
 @api.get("/push/vapid-public-key")
 async def push_vapid_public_key():
     return {"public_key": VAPID_PUBLIC_KEY}
@@ -1092,6 +1165,8 @@ async def push_subscribe(req: PushSubscribeReq, user: dict = Depends(get_current
         {"$set": doc, "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": datetime.now(timezone.utc).isoformat()}},
         upsert=True,
     )
+    # Mirror timezone onto the user for reminder scheduling
+    await db.users.update_one({"id": user["id"]}, {"$set": {"tz_label": tz_label}})
     return {"ok": True, "tz_label": tz_label}
 
 
@@ -1165,56 +1240,75 @@ async def push_test(user: dict = Depends(get_current_user)):
     return {"ok": True, "sent": sent}
 
 
-async def send_task_reminders(tz_label: str, zone: str):
-    """8 AM local: remind users about tasks due today."""
-    today = datetime.now(ZoneInfo(zone)).strftime("%Y-%m-%d")
-    subs = await db.push_subscriptions.find({"tz_label": tz_label}, {"_id": 0}).to_list(5000)
-    for sub in subs:
-        u = await db.users.find_one({"id": sub["user_id"]}, {"_id": 0})
-        if not u or not u.get("family_id"):
-            continue
-        # Tasks due today in the family, not completed, assigned to them or unassigned
-        due = await db.tasks.count_documents({
-            "family_id": u["family_id"],
-            "due_date": today,
-            "completed": False,
-            "$or": [{"assigned_to": u["id"]}, {"assigned_to": None}],
-        })
-        if due <= 0:
-            continue
-        payload = {
-            "title": "Pengingat Tugas Hari Ini 📋",
-            "body": f"Kamu punya {due} tugas yang harus diselesaikan hari ini. Yuk cek di Famly!",
-            "url": "/",
-        }
-        ok, gone = await asyncio.to_thread(_send_webpush_sync, sub, payload)
-        if gone:
-            await db.push_subscriptions.delete_one({"endpoint": sub["endpoint"]})
+def _shift_hm(hhmm: str, minus_minutes: int) -> str:
+    h, m = hhmm.split(":")
+    total = (int(h) * 60 + int(m) - minus_minutes) % (24 * 60)
+    return f"{total // 60:02d}:{total % 60:02d}"
 
 
-async def send_finance_reminders(tz_label: str, zone: str):
-    """8 PM local: remind users to log today's family finances."""
-    today = datetime.now(ZoneInfo(zone)).strftime("%Y-%m-%d")
-    subs = await db.push_subscriptions.find({"tz_label": tz_label}, {"_id": 0}).to_list(5000)
-    for sub in subs:
-        u = await db.users.find_one({"id": sub["user_id"]}, {"_id": 0})
+async def reminder_tick():
+    """Runs every minute. Sends per-user reminders based on their custom preferences,
+    interpreting times in each user's Indonesian timezone (WIB/WITA/WIT)."""
+    try:
+        user_ids = await db.push_subscriptions.distinct("user_id")
+    except Exception as e:
+        logging.warning("reminder_tick distinct failed: %s", str(e))
+        return
+    for uid in user_ids:
+        u = await db.users.find_one({"id": uid}, {"_id": 0})
         if not u or not u.get("family_id"):
             continue
-        # Only remind if no expense was recorded today (by created_at date prefix)
-        logged = await db.expenses.count_documents({
-            "family_id": u["family_id"],
-            "created_at": {"$regex": f"^{today}"},
-        })
-        if logged > 0:
-            continue
-        payload = {
-            "title": "Catat Keuangan Hari Ini 💰",
-            "body": "Jangan lupa catat pemasukan & pengeluaran keluarga hari ini di Famly.",
-            "url": "/",
-        }
-        ok, gone = await asyncio.to_thread(_send_webpush_sync, sub, payload)
-        if gone:
-            await db.push_subscriptions.delete_one({"endpoint": sub["endpoint"]})
+        prefs = get_reminder_prefs(u)
+        zone = TIMEZONES.get(prefs["tz_label"], "Asia/Jakarta")
+        now_local = datetime.now(ZoneInfo(zone))
+        today = now_local.strftime("%Y-%m-%d")
+        cur = now_local.strftime("%H:%M")
+        fam = u["family_id"]
+        mine = {"$or": [{"assigned_to": uid}, {"assigned_to": None}]}
+
+        # 1) Daily task summary (all-day tasks due today, no specific time)
+        if prefs["task_reminder_enabled"] and cur == prefs["task_summary_time"]:
+            due_today = await db.tasks.count_documents({
+                "family_id": fam, "due_date": today, "completed": False, **mine,
+            })
+            if due_today > 0:
+                await notify_user_push(
+                    uid, "Tugas Hari Ini 📋",
+                    f"Kamu punya {due_today} tugas hari ini. Yuk cek di Famly!",
+                )
+
+        # 2) Timed task reminders (notify lead minutes before due_time)
+        if prefs["task_reminder_enabled"]:
+            lead = int(prefs["task_lead_minutes"])
+            timed = await db.tasks.find({
+                "family_id": fam, "due_date": today, "completed": False,
+                "due_time": {"$ne": None}, **mine,
+            }, {"_id": 0}).to_list(200)
+            for t in timed:
+                if not t.get("due_time"):
+                    continue
+                if uid in (t.get("notified_users") or []):
+                    continue
+                if _shift_hm(t["due_time"], lead) == cur:
+                    lead_txt = "sekarang" if lead == 0 else f"dalam {lead} menit"
+                    await notify_user_push(
+                        uid, "Pengingat Tugas ⏰",
+                        f"\"{t['title']}\" jatuh tempo {lead_txt} (pukul {t['due_time']}).",
+                    )
+                    await db.tasks.update_one({"id": t["id"]}, {"$addToSet": {"notified_users": uid}})
+
+        # 3) Finance reminder (only if no expense logged today, in user's tz)
+        if prefs["finance_reminder_enabled"] and cur == prefs["finance_reminder_time"]:
+            start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+            start_utc_iso = start_local.astimezone(timezone.utc).isoformat()
+            logged = await db.expenses.count_documents({
+                "family_id": fam, "created_at": {"$gte": start_utc_iso},
+            })
+            if logged == 0:
+                await notify_user_push(
+                    uid, "Catat Keuangan Hari Ini 💰",
+                    "Jangan lupa catat pemasukan & pengeluaran keluarga hari ini.",
+                )
 
 
 # ============================================================================
@@ -1288,21 +1382,16 @@ async def on_startup():
         elif existing.get("role") != "admin":
             await db.users.update_one({"email": ADMIN_EMAIL}, {"$set": {"role": "admin"}})
 
-    # Start push-notification scheduler (per Indonesian timezone)
+    # Start push-notification scheduler (per-minute ticker, per-user custom times)
     if VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY:
         global scheduler
         scheduler = AsyncIOScheduler()
-        for label, zone in TIMEZONES.items():
-            scheduler.add_job(
-                send_task_reminders, CronTrigger(hour=8, minute=0, timezone=ZoneInfo(zone)),
-                args=[label, zone], id=f"task_reminder_{label}", replace_existing=True,
-            )
-            scheduler.add_job(
-                send_finance_reminders, CronTrigger(hour=20, minute=0, timezone=ZoneInfo(zone)),
-                args=[label, zone], id=f"finance_reminder_{label}", replace_existing=True,
-            )
+        scheduler.add_job(
+            reminder_tick, CronTrigger(second=0),
+            id="reminder_tick", replace_existing=True, max_instances=1, coalesce=True,
+        )
         scheduler.start()
-        logger.info("Push notification scheduler started for %s timezones", len(TIMEZONES))
+        logger.info("Push notification scheduler started (per-minute reminder ticker)")
     else:
         logger.warning("VAPID keys missing - push scheduler disabled")
 

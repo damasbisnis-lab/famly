@@ -1,12 +1,30 @@
 import { useEffect, useState } from "react";
 import api, { formatApiError } from "@/lib/api";
-import { Bell, BellOff, Send } from "lucide-react";
+import { Bell, BellOff, Send, Clock, Save } from "lucide-react";
 
 const TZ_OPTIONS = [
   { value: "WIB", label: "WIB (Jakarta, Sumatra, Jawa)" },
   { value: "WITA", label: "WITA (Bali, Sulawesi, Kalimantan)" },
   { value: "WIT", label: "WIT (Maluku, Papua)" },
 ];
+
+const LEAD_OPTIONS = [
+  { value: 0, label: "Tepat waktu" },
+  { value: 5, label: "5 menit sebelum" },
+  { value: 15, label: "15 menit sebelum" },
+  { value: 30, label: "30 menit sebelum" },
+  { value: 60, label: "1 jam sebelum" },
+  { value: 120, label: "2 jam sebelum" },
+];
+
+const DEFAULT_PREFS = {
+  task_reminder_enabled: true,
+  task_summary_time: "08:00",
+  task_lead_minutes: 30,
+  finance_reminder_enabled: true,
+  finance_reminder_time: "20:00",
+  tz_label: "WIB",
+};
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -26,8 +44,9 @@ const isSupported = () =>
 export function PushToggle() {
   const [supported] = useState(isSupported());
   const [subscribed, setSubscribed] = useState(false);
-  const [tz, setTz] = useState("WIB");
+  const [prefs, setPrefs] = useState(DEFAULT_PREFS);
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
 
@@ -35,9 +54,12 @@ export function PushToggle() {
     if (!supported) return;
     (async () => {
       try {
-        const { data } = await api.get("/push/status");
-        setSubscribed(data.subscribed);
-        if (data.tz_label) setTz(data.tz_label);
+        const [s, p] = await Promise.all([
+          api.get("/push/status"),
+          api.get("/push/preferences"),
+        ]);
+        setSubscribed(s.data.subscribed);
+        if (p.data.preferences) setPrefs({ ...DEFAULT_PREFS, ...p.data.preferences });
       } catch {
         /* ignore */
       }
@@ -48,6 +70,8 @@ export function PushToggle() {
     setMsg(m);
     setTimeout(() => setMsg(""), 3000);
   };
+
+  const setPref = (k, v) => setPrefs((p) => ({ ...p, [k]: v }));
 
   const enable = async () => {
     setErr("");
@@ -73,14 +97,14 @@ export function PushToggle() {
       await api.post("/push/subscribe", {
         endpoint: json.endpoint,
         keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
-        tz_label: tz,
+        tz_label: prefs.tz_label,
       });
       setSubscribed(true);
       flash("Notifikasi aktif! Mengirim notifikasi tes...");
       try {
         await api.post("/push/test");
       } catch {
-        /* test best-effort */
+        /* best-effort */
       }
     } catch (e) {
       setErr(formatApiError(e) || "Gagal mengaktifkan notifikasi.");
@@ -108,22 +132,37 @@ export function PushToggle() {
     }
   };
 
-  const updateTz = async (newTz) => {
-    setTz(newTz);
-    if (!subscribed) return;
+  const savePrefs = async () => {
+    setErr("");
+    setSaving(true);
     try {
-      const reg = await navigator.serviceWorker.getRegistration();
-      const sub = reg && (await reg.pushManager.getSubscription());
-      if (!sub) return;
-      const json = sub.toJSON();
-      await api.post("/push/subscribe", {
-        endpoint: json.endpoint,
-        keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
-        tz_label: newTz,
+      const { data } = await api.put("/push/preferences", {
+        task_reminder_enabled: prefs.task_reminder_enabled,
+        task_summary_time: prefs.task_summary_time,
+        task_lead_minutes: Number(prefs.task_lead_minutes),
+        finance_reminder_enabled: prefs.finance_reminder_enabled,
+        finance_reminder_time: prefs.finance_reminder_time,
+        tz_label: prefs.tz_label,
       });
-      flash("Zona waktu diperbarui.");
+      if (data.preferences) setPrefs({ ...DEFAULT_PREFS, ...data.preferences });
+      // keep subscription tz in sync
+      if (subscribed) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sub = reg && (await reg.pushManager.getSubscription());
+        if (sub) {
+          const json = sub.toJSON();
+          await api.post("/push/subscribe", {
+            endpoint: json.endpoint,
+            keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+            tz_label: prefs.tz_label,
+          });
+        }
+      }
+      flash("Pengaturan pengingat disimpan.");
     } catch (e) {
       setErr(formatApiError(e));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -162,7 +201,7 @@ export function PushToggle() {
               Notifikasi Pengingat
             </div>
             <div className="text-xs text-stone-500">
-              Pengingat tugas (08.00) & keuangan (20.00)
+              Reminder tugas & keuangan, atur waktunya sendiri
             </div>
           </div>
         </div>
@@ -188,32 +227,118 @@ export function PushToggle() {
         )}
       </div>
 
-      <div className="mt-2">
-        <label className="text-xs text-stone-600 block mb-1">Zona waktu Anda</label>
-        <select
-          data-testid="push-tz-select"
-          value={tz}
-          onChange={(e) => updateTz(e.target.value)}
-          className="input-field !py-2 text-sm"
-        >
-          {TZ_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Reminder settings */}
+      <div className="mt-3 space-y-3 border-t border-stone-100 pt-3">
+        <div>
+          <label className="text-xs text-stone-600 block mb-1">Zona waktu Anda</label>
+          <select
+            data-testid="push-tz-select"
+            value={prefs.tz_label}
+            onChange={(e) => setPref("tz_label", e.target.value)}
+            className="input-field !py-2 text-sm"
+          >
+            {TZ_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {subscribed && (
+        {/* Task reminders */}
+        <div className="rounded-xl border border-stone-100 p-3">
+          <label className="flex items-center justify-between cursor-pointer">
+            <span className="text-sm font-semibold text-stone-700 flex items-center gap-1">
+              <Clock size={14} /> Pengingat Tugas
+            </span>
+            <input
+              data-testid="task-reminder-toggle"
+              type="checkbox"
+              checked={prefs.task_reminder_enabled}
+              onChange={(e) => setPref("task_reminder_enabled", e.target.checked)}
+              className="w-4 h-4 accent-[#2F7A7D]"
+            />
+          </label>
+          {prefs.task_reminder_enabled && (
+            <div className="mt-2 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-stone-600">Ringkasan harian jam</span>
+                <input
+                  data-testid="task-summary-time-input"
+                  type="time"
+                  value={prefs.task_summary_time}
+                  onChange={(e) => setPref("task_summary_time", e.target.value)}
+                  className="input-field !py-1.5 !w-32 text-sm"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-stone-600">Tugas berwaktu, ingatkan</span>
+                <select
+                  data-testid="task-lead-select"
+                  value={prefs.task_lead_minutes}
+                  onChange={(e) => setPref("task_lead_minutes", Number(e.target.value))}
+                  className="input-field !py-1.5 !w-40 text-sm"
+                >
+                  {LEAD_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Finance reminder */}
+        <div className="rounded-xl border border-stone-100 p-3">
+          <label className="flex items-center justify-between cursor-pointer">
+            <span className="text-sm font-semibold text-stone-700 flex items-center gap-1">
+              <Clock size={14} /> Pengingat Keuangan
+            </span>
+            <input
+              data-testid="finance-reminder-toggle"
+              type="checkbox"
+              checked={prefs.finance_reminder_enabled}
+              onChange={(e) => setPref("finance_reminder_enabled", e.target.checked)}
+              className="w-4 h-4 accent-[#2F7A7D]"
+            />
+          </label>
+          {prefs.finance_reminder_enabled && (
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="text-xs text-stone-600">Ingatkan catat keuangan jam</span>
+              <input
+                data-testid="finance-time-input"
+                type="time"
+                value={prefs.finance_reminder_time}
+                onChange={(e) => setPref("finance_reminder_time", e.target.value)}
+                className="input-field !py-1.5 !w-32 text-sm"
+              />
+            </div>
+          )}
+        </div>
+
         <button
-          data-testid="push-test-btn"
-          onClick={sendTest}
-          className="mt-3 w-full py-2 rounded-xl text-xs font-semibold border border-dashed flex items-center justify-center gap-2"
-          style={{ borderColor: "#2F7A7D", color: "#2F7A7D" }}
+          data-testid="push-save-prefs-btn"
+          onClick={savePrefs}
+          disabled={saving}
+          className="w-full py-2 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+          style={{ background: "#2F7A7D" }}
         >
-          <Send size={12} /> Kirim Notifikasi Tes
+          <Save size={14} /> {saving ? "Menyimpan..." : "Simpan Pengaturan"}
         </button>
-      )}
+
+        {subscribed && (
+          <button
+            data-testid="push-test-btn"
+            onClick={sendTest}
+            className="w-full py-2 rounded-xl text-xs font-semibold border border-dashed flex items-center justify-center gap-2"
+            style={{ borderColor: "#2F7A7D", color: "#2F7A7D" }}
+          >
+            <Send size={12} /> Kirim Notifikasi Tes
+          </button>
+        )}
+      </div>
 
       {msg && (
         <div className="mt-2 text-xs text-green-700" data-testid="push-message">

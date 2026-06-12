@@ -37,6 +37,14 @@ Lanjutkan Famly: (1) Stripe Checkout asli untuk upgrade premium Rp 49.000/bln + 
 - [x] Indonesian UI throughout, IDR formatting (Rp 49.000)
 - [x] Testing: 25/25 backend pass, 12/12 frontend pass
 
+## Flexible Reminders + Task Time + Welcome Banner (2026-06-12)
+- [x] Tasks now support optional `due_time` (HH:MM); shown in task list badge & form (time input appears when date set)
+- [x] Per-user reminder preferences (`reminder_prefs` on user): task_reminder_enabled, task_summary_time, task_lead_minutes, finance_reminder_enabled, finance_reminder_time, tz_label. Endpoints `GET/PUT /api/push/preferences`
+- [x] Scheduler replaced 6 fixed cron jobs with single per-minute ticker `reminder_tick`: daily task summary (all-day tasks at custom time), timed-task reminders (N minutes before due_time, dedup via task.notified_users), finance reminder (custom time, only if no expense logged that local day)
+- [x] All times interpreted in each user's Indonesian tz (WIB/WITA/WIT)
+- [x] Frontend: PushToggle expanded with reminder settings UI; WelcomeBanner (one-time, shown in standalone/installed mode)
+- Tested: ticker fired at custom WIB time & dispatched push ✓; endpoints via curl ✓; 5 pytest regression tests pass (`tests/test_reminders.py`)
+
 ## PWA Installable Android/iOS (2026-06-12)
 - [x] Square icons dibuat: `/brand/icon-192.png`, `icon-512.png`, `icon-maskable-512.png`
 - [x] manifest.json diperbaiki (icons 192/512 + maskable, start_url `/app`, display standalone, id)
