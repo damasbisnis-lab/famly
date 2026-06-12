@@ -1,56 +1,54 @@
-import { useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import AuthPage from "@/pages/AuthPage";
+import Dashboard from "@/pages/Dashboard";
+import AdminDashboard from "@/pages/AdminDashboard";
+import { PaymentSuccessPage, PaymentCancelPage } from "@/pages/PaymentPages";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+function Protected({ children, adminOnly = false }) {
+  const { user, bootstrapped } = useAuth();
+  if (!bootstrapped) {
+    return (
+      <div className="app-shell flex items-center justify-center min-h-screen">
+        <div className="text-stone-500 text-sm">Memuat...</div>
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (adminOnly && user.role !== "admin") return <Navigate to="/" replace />;
+  // If logged-in admin lands on user dashboard, redirect to /admin
+  if (!adminOnly && user.role === "admin") return <Navigate to="/admin" replace />;
+  return children;
+}
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
+function AppRoutes() {
+  const { user, bootstrapped } = useAuth();
   return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
-
-function App() {
-  return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
+    <Routes>
+      <Route path="/login" element={
+        !bootstrapped ? <div className="app-shell flex items-center justify-center"><div className="text-stone-500 text-sm pt-20">Memuat...</div></div>
+        : user ? <Navigate to={user.role === 'admin' ? '/admin' : '/'} replace /> : <AuthPage mode="login" />
+      } />
+      <Route path="/register" element={
+        !bootstrapped ? <div className="app-shell flex items-center justify-center"><div className="text-stone-500 text-sm pt-20">Memuat...</div></div>
+        : user ? <Navigate to={user.role === 'admin' ? '/admin' : '/'} replace /> : <AuthPage mode="register" />
+      } />
+      <Route path="/" element={<Protected><Dashboard /></Protected>} />
+      <Route path="/admin" element={<Protected adminOnly><AdminDashboard /></Protected>} />
+      <Route path="/payment/success" element={<Protected><PaymentSuccessPage /></Protected>} />
+      <Route path="/payment/cancel" element={<Protected><PaymentCancelPage /></Protected>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
