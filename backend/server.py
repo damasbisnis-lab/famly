@@ -730,6 +730,141 @@ async def admin_transactions(user: dict = Depends(require_admin)):
 
 
 # ============================================================================
+# SETTINGS (admin WhatsApp number for manual payment confirmation)
+# ============================================================================
+async def _get_settings() -> dict:
+    s = await db.settings.find_one({"id": "global"}, {"_id": 0})
+    if not s:
+        s = {"id": "global", "admin_whatsapp": "", "bank_info": ""}
+        await db.settings.insert_one(s)
+    return s
+
+
+class SettingsUpdateReq(BaseModel):
+    admin_whatsapp: str = Field(default="", max_length=20)
+    bank_info: str = Field(default="", max_length=300)
+
+
+@api.get("/settings/public")
+async def public_settings():
+    s = await _get_settings()
+    return {"admin_whatsapp": s.get("admin_whatsapp", ""), "bank_info": s.get("bank_info", "")}
+
+
+@api.get("/admin/settings")
+async def admin_get_settings(user: dict = Depends(require_admin)):
+    return await _get_settings()
+
+
+@api.put("/admin/settings")
+async def admin_update_settings(req: SettingsUpdateReq, user: dict = Depends(require_admin)):
+    wa = req.admin_whatsapp.strip().replace(" ", "").replace("-", "")
+    if wa.startswith("+"):
+        wa = wa[1:]
+    if wa.startswith("0"):
+        wa = "62" + wa[1:]  # Normalize Indonesian
+    await db.settings.update_one(
+        {"id": "global"},
+        {"$set": {"admin_whatsapp": wa, "bank_info": req.bank_info.strip()}},
+        upsert=True,
+    )
+    return await _get_settings()
+
+
+# ============================================================================
+# UPGRADE REQUESTS (manual confirmation via WhatsApp)
+# ============================================================================
+@api.post("/payments/request-upgrade")
+async def request_upgrade(user: dict = Depends(require_active_user)):
+    """Create pending upgrade request. User contacts admin via WA to confirm payment."""
+    settings = await _get_settings()
+    wa = settings.get("admin_whatsapp", "")
+    if not wa:
+        raise HTTPException(status_code=503, detail="Nomor WhatsApp admin belum diatur. Hubungi tim Famly.")
+    # Check existing pending
+    existing = await db.upgrade_requests.find_one({"user_id": user["id"], "status": "pending"}, {"_id": 0})
+    if existing:
+        req_doc = existing
+    else:
+        req_id = str(uuid.uuid4())
+        req_doc = {
+            "id": req_id,
+            "code": req_id[:8].upper(),
+            "user_id": user["id"],
+            "user_email": user["email"],
+            "user_name": user["name"],
+            "amount": PREMIUM_PRICE_IDR,
+            "currency": "idr",
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "approved_at": None,
+            "approved_by": None,
+        }
+        await db.upgrade_requests.insert_one(req_doc)
+    # Build WA link
+    msg = (
+        f"Halo Admin Famly,\n"
+        f"Saya ingin upgrade ke Premium.\n\n"
+        f"Nama: {user['name']}\n"
+        f"Email: {user['email']}\n"
+        f"Kode: {req_doc['code']}\n"
+        f"Nominal: Rp 49.000\n\n"
+        f"Mohon info cara pembayaran. Terima kasih!"
+    )
+    import urllib.parse
+    wa_url = f"https://wa.me/{wa}?text={urllib.parse.quote(msg)}"
+    return {"request": req_doc, "wa_url": wa_url, "admin_whatsapp": wa, "bank_info": settings.get("bank_info", "")}
+
+
+@api.get("/admin/upgrade-requests")
+async def admin_list_requests(user: dict = Depends(require_admin)):
+    items = await db.upgrade_requests.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"requests": items}
+
+
+@api.post("/admin/upgrade-requests/{req_id}/approve")
+async def admin_approve_request(req_id: str, admin: dict = Depends(require_admin)):
+    req = await db.upgrade_requests.find_one({"id": req_id}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Request tidak ditemukan")
+    if req["status"] != "pending":
+        raise HTTPException(status_code=400, detail=f"Request sudah {req['status']}")
+    until = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    await db.users.update_one(
+        {"id": req["user_id"]},
+        {"$set": {"is_premium": True, "premium_until": until, "suspended": False}},
+    )
+    await db.upgrade_requests.update_one(
+        {"id": req_id},
+        {"$set": {"status": "approved", "approved_at": datetime.now(timezone.utc).isoformat(), "approved_by": admin["id"]}},
+    )
+    await db.payment_transactions.insert_one({
+        "id": str(uuid.uuid4()),
+        "session_id": f"wa-{req_id[:12]}",
+        "user_id": req["user_id"], "user_email": req["user_email"],
+        "amount": req["amount"], "currency": "idr",
+        "package": "premium_monthly_wa",
+        "metadata": {"upgrade_request_id": req_id, "approved_by": admin["id"]},
+        "status": "paid", "payment_status": "manual_wa", "premium_granted": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"ok": True, "premium_until": until}
+
+
+@api.post("/admin/upgrade-requests/{req_id}/reject")
+async def admin_reject_request(req_id: str, admin: dict = Depends(require_admin)):
+    req = await db.upgrade_requests.find_one({"id": req_id})
+    if not req:
+        raise HTTPException(status_code=404, detail="Request tidak ditemukan")
+    await db.upgrade_requests.update_one(
+        {"id": req_id},
+        {"$set": {"status": "rejected", "approved_at": datetime.now(timezone.utc).isoformat(), "approved_by": admin["id"]}},
+    )
+    return {"ok": True}
+
+
+# ============================================================================
 # ANALYTICS - viral loop tracking
 # ============================================================================
 class TrackEventReq(BaseModel):
@@ -802,6 +937,8 @@ async def on_startup():
     await db.tasks.create_index([("family_id", 1), ("completed", 1)])
     await db.payment_transactions.create_index("session_id", unique=True)
     await db.analytics_events.create_index([("event", 1), ("created_at", -1)])
+    await db.upgrade_requests.create_index([("status", 1), ("created_at", -1)])
+    await db.upgrade_requests.create_index("user_id")
 
     # Seed admin idempotently
     existing = await db.users.find_one({"email": ADMIN_EMAIL})

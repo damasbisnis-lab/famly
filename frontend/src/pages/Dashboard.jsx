@@ -180,11 +180,14 @@ export default function Dashboard() {
     setUpgrading(true);
     setErr("");
     try {
-      const origin_url = window.location.origin;
-      const { data } = await api.post("/payments/checkout/session", { origin_url });
-      window.location.href = data.url;
+      const { data } = await api.post("/payments/request-upgrade");
+      // Open WhatsApp in new tab; user confirms payment with admin manually
+      window.open(data.wa_url, "_blank");
+      handleInfo("Lanjutkan chat di WhatsApp untuk konfirmasi pembayaran.");
+      setShowUpgrade(false);
     } catch (e2) {
       handleErr(e2);
+    } finally {
       setUpgrading(false);
     }
   };
@@ -381,6 +384,10 @@ export default function Dashboard() {
       )}
 
       <UpgradeModal open={showUpgrade} onClose={()=>setShowUpgrade(false)} onUpgrade={initiateUpgrade} loading={upgrading} />
+    </div>
+  );
+}
+de} loading={upgrading} />
     </div>
   );
 }

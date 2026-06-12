@@ -4,7 +4,7 @@ import api, { formatApiError, formatIDR } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
   Users, TrendingUp, DollarSign, ShieldOff, LogOut, Crown,
-  ArrowDownCircle, Ban, CheckCircle2, RefreshCw, Receipt, Share2
+  ArrowDownCircle, Ban, CheckCircle2, RefreshCw, Receipt, Share2, MessageCircle, Settings, XCircle
 } from "lucide-react";
 
 function StatCard({ icon: Icon, label, value, accent }) {
@@ -35,6 +35,8 @@ export default function AdminDashboard() {
   const [subs, setSubs] = useState([]);
   const [txns, setTxns] = useState([]);
   const [analytics, setAnalytics] = useState(null);
+  const [upgradeReqs, setUpgradeReqs] = useState([]);
+  const [settings, setSettings] = useState({admin_whatsapp: "", bank_info: ""});
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,16 +45,20 @@ export default function AdminDashboard() {
   const load = async () => {
     setLoading(true);
     try {
-      const [s, sub, t, a] = await Promise.all([
+      const [s, sub, t, a, ur, st] = await Promise.all([
         api.get("/admin/stats"),
         api.get("/admin/subscribers"),
         api.get("/admin/transactions"),
         api.get("/admin/analytics"),
+        api.get("/admin/upgrade-requests"),
+        api.get("/admin/settings"),
       ]);
       setStats(s.data);
       setSubs(sub.data.subscribers);
       setTxns(t.data.transactions);
       setAnalytics(a.data);
+      setUpgradeReqs(ur.data.requests);
+      setSettings({admin_whatsapp: st.data.admin_whatsapp || "", bank_info: st.data.bank_info || ""});
     } catch (e) {
       setErr(formatApiError(e));
     } finally {
@@ -100,6 +106,20 @@ export default function AdminDashboard() {
             className={`w-full text-left px-3 py-2 rounded-lg ${tab==='transactions' ? 'bg-stone-800 text-white border-l-4' : 'hover:bg-stone-800/50'}`}
             style={tab==='transactions' ? {borderLeftColor:'#F08C3F'} : {}}>
             Transaksi
+          </button>
+          <button
+            data-testid="admin-tab-requests"
+            onClick={()=>setTab("requests")}
+            className={`w-full text-left px-3 py-2 rounded-lg ${tab==='requests' ? 'bg-stone-800 text-white border-l-4' : 'hover:bg-stone-800/50'}`}
+            style={tab==='requests' ? {borderLeftColor:'#F08C3F'} : {}}>
+            Permintaan Upgrade ({upgradeReqs.filter(r=>r.status==='pending').length})
+          </button>
+          <button
+            data-testid="admin-tab-settings"
+            onClick={()=>setTab("settings")}
+            className={`w-full text-left px-3 py-2 rounded-lg ${tab==='settings' ? 'bg-stone-800 text-white border-l-4' : 'hover:bg-stone-800/50'}`}
+            style={tab==='settings' ? {borderLeftColor:'#F08C3F'} : {}}>
+            Pengaturan
           </button>
         </nav>
         <button
@@ -225,6 +245,95 @@ export default function AdminDashboard() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {tab === "requests" && (
+          <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-stone-200 font-bold flex items-center gap-2" style={{fontFamily:'Manrope'}}>
+              <MessageCircle size={16}/> Permintaan Upgrade via WhatsApp ({upgradeReqs.length})
+            </div>
+            <table className="w-full text-sm" data-testid="upgrade-requests-table">
+              <thead className="bg-stone-50 text-stone-500 text-xs uppercase tracking-wider">
+                <tr>
+                  <th className="px-4 py-3 text-left">Kode</th>
+                  <th className="px-4 py-3 text-left">User</th>
+                  <th className="px-4 py-3 text-left">Tanggal</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                  <th className="px-4 py-3 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {upgradeReqs.map((r) => (
+                  <tr key={r.id} className="border-t border-stone-100" data-testid={`request-row-${r.code}`}>
+                    <td className="px-4 py-3 font-mono font-bold">{r.code}</td>
+                    <td className="px-4 py-3"><div className="font-medium">{r.user_name}</div><div className="text-xs text-stone-500">{r.user_email}</div></td>
+                    <td className="px-4 py-3 text-xs text-stone-500">{new Date(r.created_at).toLocaleString('id-ID')}</td>
+                    <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${r.status==='approved'?'bg-green-100 text-green-800':r.status==='rejected'?'bg-red-100 text-red-800':'bg-yellow-100 text-yellow-800'}`}>{r.status}</span></td>
+                    <td className="px-4 py-3 text-right">
+                      {r.status === 'pending' && (
+                        <div className="flex gap-1 justify-end">
+                          <button
+                            data-testid={`approve-req-${r.code}`}
+                            onClick={()=>doAction(`/admin/upgrade-requests/${r.id}/approve`, `Request ${r.code} disetujui & user di-upgrade ke Premium`)}
+                            className="px-2.5 py-1.5 rounded-lg text-white text-xs font-semibold flex items-center gap-1" style={{background:'#7BA98A'}}
+                          ><CheckCircle2 size={12}/> Setujui</button>
+                          <button
+                            data-testid={`reject-req-${r.code}`}
+                            onClick={()=>doAction(`/admin/upgrade-requests/${r.id}/reject`, `Request ${r.code} ditolak`)}
+                            className="px-2.5 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-semibold flex items-center gap-1"
+                          ><XCircle size={12}/> Tolak</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {upgradeReqs.length === 0 && (
+                  <tr><td colSpan="5" className="px-4 py-8 text-center text-stone-500">Belum ada permintaan upgrade.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {tab === "settings" && (
+          <div className="bg-white rounded-2xl border border-stone-200 p-6 max-w-2xl">
+            <div className="flex items-center gap-2 mb-4 font-bold" style={{fontFamily:'Manrope'}}>
+              <Settings size={18}/> Pengaturan Pembayaran Manual
+            </div>
+            <form
+              data-testid="settings-form"
+              onSubmit={async (e)=>{
+                e.preventDefault();
+                setErr(""); setInfo("");
+                try {
+                  await api.put("/admin/settings", settings);
+                  setInfo("Pengaturan tersimpan");
+                  setTimeout(()=>setInfo(""), 2500);
+                  await load();
+                } catch (e2) { setErr(formatApiError(e2)); }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="text-sm font-semibold block mb-1">Nomor WhatsApp Admin</label>
+                <input data-testid="settings-wa-input" className="input-field" placeholder="08123456789 atau 628123456789"
+                  value={settings.admin_whatsapp} onChange={(e)=>setSettings({...settings, admin_whatsapp:e.target.value})} required />
+                <p className="text-xs text-stone-500 mt-1">Nomor ini akan muncul saat user klik upgrade Premium. Format apa saja, otomatis dinormalisasi ke 62xx.</p>
+              </div>
+              <div>
+                <label className="text-sm font-semibold block mb-1">Info Rekening / Pembayaran (opsional)</label>
+                <textarea data-testid="settings-bank-input" className="input-field" rows={3} placeholder="BCA 1234567890 a.n. Admin Famly"
+                  value={settings.bank_info} onChange={(e)=>setSettings({...settings, bank_info:e.target.value})} />
+              </div>
+              <button data-testid="settings-save-btn" className="btn-primary" type="submit">Simpan Pengaturan</button>
+            </form>
+            {settings.admin_whatsapp && (
+              <div className="mt-6 p-4 rounded-xl bg-stone-50 text-sm">
+                <div className="font-semibold mb-1">Preview:</div>
+                <div className="text-stone-600">WhatsApp aktif di nomor <span className="font-mono font-bold">+{settings.admin_whatsapp}</span></div>
+              </div>
+            )}
           </div>
         )}
 
