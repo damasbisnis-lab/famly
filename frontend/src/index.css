@@ -194,3 +194,29 @@ h1, h2, h3, h4, h5 {
 .color-teal { color: var(--color-tertiary); }
 .bg-teal { background: var(--color-tertiary); color: #fff; }
 .bg-accent-yellow { background: var(--color-accent); color: #1E2A28; }
+
+/* Splash */
+.splash-logo-wrap { position: relative; display: grid; place-items: center; }
+.splash-pulse {
+  position: absolute; inset: -20px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(240,140,63,0.28) 0%, transparent 65%);
+  animation: splash-pulse 2.4s ease-in-out infinite;
+}
+.splash-float { animation: splash-float 3s ease-in-out infinite; }
+.splash-dot {
+  width: 10px; height: 10px; border-radius: 999px; display: inline-block;
+  animation: splash-bounce 1s ease-in-out infinite;
+}
+@keyframes splash-pulse {
+  0%, 100% { transform: scale(0.9); opacity: 0.55; }
+  50%      { transform: scale(1.15); opacity: 1; }
+}
+@keyframes splash-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes splash-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.55; }
+  40%           { transform: translateY(-8px); opacity: 1; }
+}

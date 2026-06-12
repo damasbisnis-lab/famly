@@ -69,7 +69,7 @@ export function PaymentSuccessPage() {
         {status === "paid" && <p className="text-sm text-stone-500 mb-4">Nominal: {formatIDR(49000)}</p>}
         <button
           data-testid="back-to-dashboard-btn"
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/app")}
           className="btn-primary mt-6"
         >
           Kembali ke Dashboard

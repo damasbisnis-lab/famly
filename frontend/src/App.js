@@ -4,37 +4,40 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import AuthPage from "@/pages/AuthPage";
 import Dashboard from "@/pages/Dashboard";
 import AdminDashboard from "@/pages/AdminDashboard";
+import Landing from "@/pages/Landing";
+import SplashScreen from "@/components/SplashScreen";
 import { PaymentSuccessPage, PaymentCancelPage } from "@/pages/PaymentPages";
 
 function Protected({ children, adminOnly = false }) {
   const { user, bootstrapped } = useAuth();
-  if (!bootstrapped) {
-    return (
-      <div className="app-shell flex items-center justify-center min-h-screen">
-        <div className="text-stone-500 text-sm">Memuat...</div>
-      </div>
-    );
-  }
+  if (!bootstrapped) return <SplashScreen />;
   if (!user) return <Navigate to="/login" replace />;
-  if (adminOnly && user.role !== "admin") return <Navigate to="/" replace />;
-  // If logged-in admin lands on user dashboard, redirect to /admin
+  if (adminOnly && user.role !== "admin") return <Navigate to="/app" replace />;
   if (!adminOnly && user.role === "admin") return <Navigate to="/admin" replace />;
   return children;
 }
 
-function AppRoutes() {
+function PublicOnly({ children }) {
   const { user, bootstrapped } = useAuth();
+  if (!bootstrapped) return <SplashScreen />;
+  if (user) return <Navigate to={user.role === "admin" ? "/admin" : "/app"} replace />;
+  return children;
+}
+
+function RootGate() {
+  // Landing is accessible to everyone; logged-in users see "Buka Dashboard" CTA
+  const { bootstrapped } = useAuth();
+  if (!bootstrapped) return <SplashScreen />;
+  return <Landing />;
+}
+
+function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={
-        !bootstrapped ? <div className="app-shell flex items-center justify-center"><div className="text-stone-500 text-sm pt-20">Memuat...</div></div>
-        : user ? <Navigate to={user.role === 'admin' ? '/admin' : '/'} replace /> : <AuthPage mode="login" />
-      } />
-      <Route path="/register" element={
-        !bootstrapped ? <div className="app-shell flex items-center justify-center"><div className="text-stone-500 text-sm pt-20">Memuat...</div></div>
-        : user ? <Navigate to={user.role === 'admin' ? '/admin' : '/'} replace /> : <AuthPage mode="register" />
-      } />
-      <Route path="/" element={<Protected><Dashboard /></Protected>} />
+      <Route path="/" element={<RootGate />} />
+      <Route path="/login" element={<PublicOnly><AuthPage mode="login" /></PublicOnly>} />
+      <Route path="/register" element={<PublicOnly><AuthPage mode="register" /></PublicOnly>} />
+      <Route path="/app" element={<Protected><Dashboard /></Protected>} />
       <Route path="/admin" element={<Protected adminOnly><AdminDashboard /></Protected>} />
       <Route path="/payment/success" element={<Protected><PaymentSuccessPage /></Protected>} />
       <Route path="/payment/cancel" element={<Protected><PaymentCancelPage /></Protected>} />

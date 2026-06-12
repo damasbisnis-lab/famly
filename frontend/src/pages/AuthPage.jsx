@@ -23,7 +23,7 @@ export default function AuthPage({ mode = "login" }) {
         ? await login(email, password)
         : await register(email, password, name);
       if (u.role === "admin") navigate("/admin");
-      else navigate("/");
+      else navigate("/app");
     } catch (e2) {
       setErr(formatApiError(e2));
     } finally {
