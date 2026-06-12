@@ -76,33 +76,34 @@ export default function AdminDashboard() {
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
-        <div className="flex items-center gap-2 mb-10">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{background:'#E07A5F'}}>
-            <Crown size={18} color="#fff" />
-          </div>
+        <div className="flex items-center gap-3 mb-10">
+          <img src="/brand/famly-logo.png" alt="Famly" className="brand-logo-sm" style={{filter:'drop-shadow(0 2px 8px rgba(0,0,0,0.3))'}} />
           <div>
             <div className="text-white font-bold" style={{fontFamily:'Manrope'}}>Famly Admin</div>
-            <div className="text-xs text-stone-400">{user.email}</div>
+            <div className="text-xs" style={{color:'#A89F8B'}}>{user.email}</div>
           </div>
         </div>
         <nav className="space-y-1 text-sm">
           <button
             data-testid="admin-tab-subscribers"
             onClick={()=>setTab("subscribers")}
-            className={`w-full text-left px-3 py-2 rounded-lg ${tab==='subscribers' ? 'bg-stone-800 text-white border-l-4 border-[#E07A5F]' : 'hover:bg-stone-800/50'}`}>
+            className={`w-full text-left px-3 py-2 rounded-lg ${tab==='subscribers' ? 'bg-stone-800 text-white border-l-4' : 'hover:bg-stone-800/50'}`}
+            style={tab==='subscribers' ? {borderLeftColor:'#F08C3F'} : {}}>
             Subscribers
           </button>
           <button
             data-testid="admin-tab-transactions"
             onClick={()=>setTab("transactions")}
-            className={`w-full text-left px-3 py-2 rounded-lg ${tab==='transactions' ? 'bg-stone-800 text-white border-l-4 border-[#E07A5F]' : 'hover:bg-stone-800/50'}`}>
+            className={`w-full text-left px-3 py-2 rounded-lg ${tab==='transactions' ? 'bg-stone-800 text-white border-l-4' : 'hover:bg-stone-800/50'}`}
+            style={tab==='transactions' ? {borderLeftColor:'#F08C3F'} : {}}>
             Transaksi
           </button>
         </nav>
         <button
           data-testid="admin-logout-btn"
           onClick={()=>{ logout(); navigate("/login"); }}
-          className="mt-10 w-full text-left text-sm text-stone-400 hover:text-white flex items-center gap-2 px-3 py-2"
+          className="mt-10 w-full text-left text-sm hover:text-white flex items-center gap-2 px-3 py-2"
+          style={{color:'#A89F8B'}}
         >
           <LogOut size={14}/> Keluar
         </button>
@@ -124,10 +125,10 @@ export default function AdminDashboard() {
 
         {stats && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <StatCard icon={Users} label="Total User" value={stats.total_users} accent="#81B29A" />
-            <StatCard icon={TrendingUp} label="Active Subscribers" value={stats.active_subscribers} accent="#E07A5F" />
-            <StatCard icon={DollarSign} label="MRR" value={formatIDR(stats.mrr_idr)} accent="#F4A261" />
-            <StatCard icon={ShieldOff} label="Suspended" value={stats.suspended_users} accent="#EF4444" />
+            <StatCard icon={Users} label="Total User" value={stats.total_users} accent="#7BA98A" />
+            <StatCard icon={TrendingUp} label="Active Subscribers" value={stats.active_subscribers} accent="#F08C3F" />
+            <StatCard icon={DollarSign} label="MRR" value={formatIDR(stats.mrr_idr)} accent="#E8B341" />
+            <StatCard icon={ShieldOff} label="Suspended" value={stats.suspended_users} accent="#DC4B4B" />
           </div>
         )}
 
@@ -160,7 +161,8 @@ export default function AdminDashboard() {
                             <button
                               data-testid={`upgrade-btn-${s.email}`}
                               onClick={()=>doAction(`/admin/users/${s.id}/upgrade`, `${s.name} di-upgrade ke Premium`)}
-                              className="px-2.5 py-1.5 rounded-lg bg-[#E07A5F] text-white text-xs font-semibold hover:bg-[#D3644B] flex items-center gap-1"
+                              className="px-2.5 py-1.5 rounded-lg text-white text-xs font-semibold flex items-center gap-1"
+                              style={{background:'#F08C3F'}}
                             ><Crown size={12}/> Upgrade</button>
                           )}
                           {s.premium_active && (

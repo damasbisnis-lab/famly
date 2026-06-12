@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api, { formatApiError, formatIDR } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
-  Users, Plus, Receipt, ListChecks, Crown, LogOut, Copy, Trash2, Check, Sparkles, ShieldAlert
+  Plus, Receipt, ListChecks, Crown, LogOut, Copy, Trash2, Check, Sparkles, ShieldAlert
 } from "lucide-react";
 
 function LimitBar({ label, used, max }) {
@@ -35,18 +35,24 @@ function UpgradeModal({ open, onClose, onUpgrade, loading }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center px-4 fade-in" onClick={onClose}>
       <div
-        className="bg-white rounded-3xl p-8 max-w-md w-full border border-[#E07A5F]/20 shadow-2xl relative overflow-hidden"
+        className="bg-white rounded-3xl p-8 max-w-md w-full border shadow-2xl relative overflow-hidden"
+        style={{borderColor: 'rgba(240,140,63,0.25)'}}
         onClick={(e) => e.stopPropagation()}
         data-testid="upgrade-modal"
       >
-        <div className="absolute inset-0 opacity-10 pointer-events-none"
-             style={{backgroundImage:'url(https://images.unsplash.com/photo-1649083048770-82e8ffd80431?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjd8MHwxfHNlYXJjaHwyfHxjb3p5JTIwbW9kZXJuJTIwaG9tZSUyMGludGVyaW9yfGVufDB8fHx8MTc4MTI2OTY0NXww&ixlib=rb-4.1.0&q=85)',backgroundSize:'cover'}} />
+        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-25 pointer-events-none"
+             style={{background:'radial-gradient(circle, #E8B341 0%, transparent 70%)'}} />
+        <div className="absolute -bottom-12 -left-8 w-44 h-44 rounded-full opacity-20 pointer-events-none"
+             style={{background:'radial-gradient(circle, #2F7A7D 0%, transparent 70%)'}} />
         <div className="relative">
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{background:'#E07A5F'}}>
-            <Crown size={22} color="#fff" />
+          <div className="flex items-center gap-3 mb-4">
+            <img src="/brand/famly-logo.png" alt="" className="w-12 h-12 object-contain" />
+            <div>
+              <div className="text-xs uppercase tracking-widest" style={{color:'#F08C3F'}}>Famly</div>
+              <h2 className="text-2xl font-bold leading-none" style={{fontFamily:'Manrope'}}>Premium</h2>
+            </div>
           </div>
-          <h2 className="text-2xl font-bold mb-1" style={{fontFamily:'Manrope'}}>Famly Premium</h2>
-          <p className="text-stone-600 mb-4">Buka semua batasan untuk keluarga Anda.</p>
+          <p className="text-stone-600 mb-4 text-sm">Buka semua batasan untuk keluarga Anda.</p>
           <div className="mb-6">
             <span className="text-4xl font-bold" style={{fontFamily:'Manrope'}}>{formatIDR(49000)}</span>
             <span className="text-stone-500"> / bulan</span>
@@ -54,7 +60,7 @@ function UpgradeModal({ open, onClose, onUpgrade, loading }) {
           <ul className="space-y-2 text-sm text-stone-700 mb-6">
             {["Anggota keluarga tanpa batas", "Pengeluaran tanpa batas per bulan", "Tugas aktif tanpa batas", "Prioritas dukungan"].map((f) => (
               <li key={f} className="flex items-center gap-2">
-                <Check size={16} color="#81B29A" /> {f}
+                <Check size={16} color="#7BA98A" /> {f}
               </li>
             ))}
           </ul>
@@ -194,10 +200,8 @@ export default function Dashboard() {
     <div className="app-shell pb-20">
       {/* Header */}
       <header className="px-6 pt-8 pb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{background:'#E07A5F'}}>
-            <Users size={18} color="#fff" />
-          </div>
+        <div className="flex items-center gap-3">
+          <img src="/brand/famly-logo.png" alt="Famly" className="brand-logo-sm" />
           <div>
             <div className="text-xs text-stone-500">Halo,</div>
             <div className="font-semibold leading-tight" data-testid="dashboard-user-name">{user.name}</div>
@@ -318,7 +322,7 @@ export default function Dashboard() {
                       <div className="font-semibold">{x.category}</div>
                       <div className="text-xs text-stone-500">{x.description || '—'} • {x.user_name}</div>
                     </div>
-                    <div className="font-bold text-[#E07A5F]">{formatIDR(x.amount)}</div>
+                    <div className="font-bold" style={{color:'#F08C3F'}}>{formatIDR(x.amount)}</div>
                   </div>
                 ))}
               </div>
@@ -343,7 +347,7 @@ export default function Dashboard() {
                       onClick={()=>toggleTask(t.id)}
                       className="flex items-center gap-2 text-left flex-1"
                     >
-                      <span className={`w-5 h-5 rounded-md border flex items-center justify-center ${t.completed ? 'bg-[#81B29A] border-[#81B29A]' : 'border-stone-300'}`}>
+                      <span className={`w-5 h-5 rounded-md border flex items-center justify-center ${t.completed ? 'bg-[#7BA98A] border-[#7BA98A]' : 'border-stone-300'}`}>
                         {t.completed && <Check size={12} color="#fff" />}
                       </span>
                       <span className={t.completed ? 'line-through text-stone-400':'text-stone-800'}>{t.title}</span>
@@ -362,15 +366,15 @@ export default function Dashboard() {
               className="w-full card-surface flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{background:'rgba(224,122,95,0.12)'}}>
-                  <Sparkles size={18} color="#E07A5F" />
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{background:'rgba(240,140,63,0.14)'}}>
+                  <Sparkles size={18} color="#F08C3F" />
                 </div>
                 <div className="text-left">
                   <div className="font-bold" style={{fontFamily:'Manrope'}}>Upgrade ke Premium</div>
                   <div className="text-xs text-stone-500">{formatIDR(49000)} / bulan</div>
                 </div>
               </div>
-              <span className="text-[#E07A5F] font-semibold">→</span>
+              <span className="font-semibold" style={{color:'#F08C3F'}}>→</span>
             </button>
           )}
         </div>

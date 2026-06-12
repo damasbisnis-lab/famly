@@ -59,9 +59,9 @@ export function PaymentSuccessPage() {
   return (
     <div className="app-shell">
       <div className="px-6 py-16 fade-in flex flex-col items-center text-center">
-        {status === "checking" && <Loader2 size={48} className="animate-spin text-[#E07A5F] mb-4" />}
-        {status === "paid" && <CheckCircle size={64} color="#81B29A" className="mb-4" />}
-        {(status === "error" || status === "expired") && <XCircle size={64} color="#EF4444" className="mb-4" />}
+        {status === "checking" && <Loader2 size={48} className="animate-spin mb-4" color="#F08C3F" />}
+        {status === "paid" && <CheckCircle size={64} color="#7BA98A" className="mb-4" />}
+        {(status === "error" || status === "expired") && <XCircle size={64} color="#DC4B4B" className="mb-4" />}
         <h1 className="text-2xl font-bold mb-2" style={{fontFamily:'Manrope'}} data-testid="payment-status-title">
           {status === "paid" ? "Pembayaran Berhasil" : status === "checking" ? "Memproses..." : "Gagal / Kadaluarsa"}
         </h1>
@@ -83,7 +83,7 @@ export function PaymentCancelPage() {
   return (
     <div className="app-shell">
       <div className="px-6 py-16 fade-in flex flex-col items-center text-center">
-        <XCircle size={64} color="#EF4444" className="mb-4" />
+        <XCircle size={64} color="#DC4B4B" className="mb-4" />
         <h1 className="text-2xl font-bold mb-2" style={{fontFamily:'Manrope'}}>Pembayaran Dibatalkan</h1>
         <p className="text-stone-600 mb-6">Anda dapat mencoba lagi kapan saja.</p>
         <Link data-testid="back-to-dashboard-link" to="/" className="btn-primary">Kembali ke Dashboard</Link>

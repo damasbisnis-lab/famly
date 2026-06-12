@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { formatApiError } from "@/lib/api";
-import { Users, Sparkles } from "lucide-react";
 
 export default function AuthPage({ mode = "login" }) {
   const navigate = useNavigate();
@@ -34,18 +33,16 @@ export default function AuthPage({ mode = "login" }) {
 
   return (
     <div className="app-shell">
-      <div className="pt-12 px-6 pb-10 fade-in">
-        <div className="flex items-center gap-2 mb-8">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{background:'#E07A5F'}}>
-            <Users size={20} color="#fff" />
-          </div>
-          <span className="text-2xl font-bold tracking-tight" style={{fontFamily:'Manrope'}}>Famly</span>
+      <div className="pt-10 px-6 pb-10 fade-in">
+        <div className="flex flex-col items-center mb-8">
+          <img src="/brand/famly-logo.png" alt="Famly - Harmonis, Seru, dan Tumbuh Bersama" className="w-56 h-56 object-contain -my-6" data-testid="brand-logo" />
+          <div className="brand-divider mt-1" />
         </div>
 
-        <h1 className="text-3xl font-bold leading-tight mb-2" style={{fontFamily:'Manrope'}}>
+        <h2 className="text-2xl font-bold leading-tight mb-2" style={{fontFamily:'Manrope'}}>
           {isLogin ? "Selamat datang kembali" : "Buat akun Famly"}
-        </h1>
-        <p className="text-stone-600 mb-8">
+        </h2>
+        <p className="text-stone-600 mb-6 text-sm">
           {isLogin
             ? "Kelola keluarga, keuangan, dan tugas dalam satu tempat."
             : "Atur keuangan dan tugas keluarga bersama-sama."}
@@ -111,21 +108,14 @@ export default function AuthPage({ mode = "login" }) {
           {isLogin ? (
             <>
               Belum punya akun?{" "}
-              <Link data-testid="auth-switch-register" to="/register" className="text-[#E07A5F] font-semibold">Daftar</Link>
+              <Link data-testid="auth-switch-register" to="/register" className="font-semibold" style={{color:'#F08C3F'}}>Daftar</Link>
             </>
           ) : (
             <>
               Sudah punya akun?{" "}
-              <Link data-testid="auth-switch-login" to="/login" className="text-[#E07A5F] font-semibold">Masuk</Link>
+              <Link data-testid="auth-switch-login" to="/login" className="font-semibold" style={{color:'#F08C3F'}}>Masuk</Link>
             </>
           )}
-        </div>
-
-        <div className="mt-10 p-4 rounded-2xl bg-white border border-stone-200">
-          <div className="flex items-center gap-2 mb-1 text-sm font-semibold">
-            <Sparkles size={16} color="#E07A5F" /> Coba akun admin
-          </div>
-          <p className="text-xs text-stone-500">admin@famly.id / admin123</p>
         </div>
       </div>
     </div>

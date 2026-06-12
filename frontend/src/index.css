@@ -5,17 +5,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Work+Sans:wght@400;500;600&display=swap');
 
 :root {
-  --color-bg: #FAFAF9;
+  --color-bg: #FBF8F3;
   --color-surface: #FFFFFF;
-  --color-primary: #E07A5F;
-  --color-primary-hover: #D3644B;
-  --color-secondary: #81B29A;
-  --color-secondary-hover: #6C9A84;
-  --color-accent: #F4A261;
-  --color-text: #1C1917;
-  --color-text-muted: #57534E;
-  --color-border: #E7E5E4;
-  --color-danger: #EF4444;
+  --color-primary: #F08C3F;
+  --color-primary-hover: #DD7728;
+  --color-secondary: #7BA98A;
+  --color-secondary-hover: #5F8E70;
+  --color-tertiary: #2F7A7D;
+  --color-tertiary-hover: #1F5F62;
+  --color-accent: #E8B341;
+  --color-accent-hover: #D29C2C;
+  --color-text: #1E2A28;
+  --color-text-muted: #5A6260;
+  --color-border: #ECE6DA;
+  --color-danger: #DC4B4B;
 }
 
 html, body, #root {
@@ -53,12 +56,12 @@ h1, h2, h3, h4, h5 {
   border-radius: 0.85rem;
   padding: 0.75rem 1.25rem;
   transition: all .2s ease;
-  box-shadow: 0 4px 12px rgba(224, 122, 95, 0.25);
+  box-shadow: 0 4px 12px rgba(240, 140, 63, 0.28);
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--color-primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(224, 122, 95, 0.35);
+  box-shadow: 0 6px 16px rgba(240, 140, 63, 0.38);
 }
 .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
 
@@ -95,7 +98,7 @@ h1, h2, h3, h4, h5 {
 .input-field:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(224, 122, 95, 0.15);
+  box-shadow: 0 0 0 3px rgba(240, 140, 63, 0.18);
 }
 
 .card-surface {
@@ -114,12 +117,12 @@ h1, h2, h3, h4, h5 {
   font-size: 0.75rem;
   font-weight: 600;
 }
-.badge-free   { background: #F5F5F4; color: #57534E; }
-.badge-premium{ background: rgba(224,122,95,0.12); color: #B5563D; }
-.badge-suspended { background: #FEE2E2; color: #B91C1C; }
-.badge-success { background: rgba(129,178,154,0.18); color: #3F6B57; }
+.badge-free   { background: #F5F0E6; color: #5A6260; }
+.badge-premium{ background: rgba(240,140,63,0.14); color: #B96A1F; }
+.badge-suspended { background: #FCE4E4; color: #B0302F; }
+.badge-success { background: rgba(123,169,138,0.20); color: #3F6B57; }
 
-.progress-track { background: #E7E5E4; border-radius: 999px; height: 8px; overflow: hidden; }
+.progress-track { background: #ECE6DA; border-radius: 999px; height: 8px; overflow: hidden; }
 .progress-fill { height: 100%; transition: width .4s ease; border-radius: 999px; }
 .progress-safe { background: var(--color-secondary); }
 .progress-warn { background: var(--color-accent); }
@@ -132,7 +135,7 @@ h1, h2, h3, h4, h5 {
   max-width: 28rem;
   margin: 0 auto;
   min-height: 100vh;
-  background: #FAFAF9;
+  background: #FBF8F3;
   position: relative;
 }
 @media (min-width: 768px) {
@@ -143,12 +146,12 @@ h1, h2, h3, h4, h5 {
 .admin-shell {
   display: flex;
   min-height: 100vh;
-  background: #F5F5F4;
+  background: #F5F0E6;
 }
 .admin-sidebar {
   width: 16rem;
-  background: #1C1917;
-  color: #D6D3D1;
+  background: linear-gradient(180deg, #1E2A28 0%, #243634 100%);
+  color: #D6CCB8;
   padding: 2rem 1.25rem;
 }
 .admin-content { flex: 1; padding: 2rem; }
@@ -156,3 +159,38 @@ h1, h2, h3, h4, h5 {
   .admin-shell { flex-direction: column; }
   .admin-sidebar { width: 100%; padding: 1rem; }
 }
+
+/* Brand */
+.brand-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+.brand-logo-sm {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+.brand-wordmark {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(95deg, #F08C3F 0%, #E8B341 45%, #2F7A7D 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.brand-tagline {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  letter-spacing: 0.02em;
+}
+.brand-divider {
+  height: 4px;
+  width: 56px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #F08C3F 0%, #E8B341 50%, #2F7A7D 100%);
+}
+.color-teal { color: var(--color-tertiary); }
+.bg-teal { background: var(--color-tertiary); color: #fff; }
+.bg-accent-yellow { background: var(--color-accent); color: #1E2A28; }
