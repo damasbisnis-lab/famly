@@ -25,9 +25,9 @@ Lanjutkan Famly: (1) Stripe Checkout asli untuk upgrade premium Rp 49.000/bln + 
 ## Implemented (2026-06-12)
 - [x] Auth endpoints: `/api/auth/register`, `/login`, `/me`, `/logout`
 - [x] Idempotent admin seeding on startup (`admin@famly.id` / `admin123`)
-- [x] Family create/join with invite code, member limit enforcement (FREE_LIMIT_MEMBERS=2)
-- [x] Expense CRUD with monthly limit enforcement (FREE_LIMIT_EXPENSES_MONTH=30)
-- [x] Task CRUD + toggle complete with active-task limit (FREE_LIMIT_TASKS_ACTIVE=50)
+- [x] Family create/join with invite code, member limit enforcement (FREE_LIMIT_MEMBERS=1)
+- [x] Expense CRUD with monthly limit enforcement (FREE_LIMIT_EXPENSES_MONTH=7)
+- [x] Task CRUD + toggle complete with active-task limit (FREE_LIMIT_TASKS_ACTIVE=5)
 - [x] Stripe Checkout Session endpoint + polling status + idempotent premium grant
 - [x] Stripe webhook endpoint (`POST /api/webhook/stripe`)
 - [x] Admin endpoints: stats, subscribers, upgrade, downgrade, suspend, unsuspend, transactions

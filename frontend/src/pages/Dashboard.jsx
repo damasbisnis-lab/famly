@@ -87,8 +87,11 @@ function UpgradeModal({ open, onClose, onUpgrade, loading, proofFile, setProofFi
             disabled={loading}
             onClick={onUpgrade}
           >
-            {loading ? "Mengarahkan ke Stripe..." : "Upgrade dengan Stripe"}
+            {loading ? "Membuka WhatsApp..." : "Konfirmasi via WhatsApp Admin"}
           </button>
+          <p className="text-xs text-center text-stone-500 mt-2">
+            Anda akan diarahkan ke chat WhatsApp admin Famly untuk konfirmasi pembayaran manual.
+          </p>
           <button data-testid="upgrade-cancel-btn" className="btn-ghost w-full mt-2" onClick={onClose}>Nanti saja</button>
         </div>
       </div>
