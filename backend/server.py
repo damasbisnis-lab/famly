@@ -306,6 +306,15 @@ async def join_family(req: FamilyJoinReq, user: dict = Depends(require_active_us
         )
 
     await db.users.update_one({"id": user["id"]}, {"$set": {"family_id": fam["id"]}})
+    # Notify existing family members that someone joined
+    members = await db.users.find(
+        {"family_id": fam["id"], "id": {"$ne": user["id"]}}, {"_id": 0, "id": 1}
+    ).to_list(100)
+    for m in members:
+        asyncio.create_task(notify_user_push(
+            m["id"], "Anggota Baru Bergabung 👨‍👩‍👧",
+            f"{user['name']} baru saja bergabung ke keluarga {fam['name']}.",
+        ))
     return {"family": fam}
 
 
@@ -717,6 +726,10 @@ async def admin_upgrade(user_id: str, admin: dict = Depends(require_admin)):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
+    asyncio.create_task(notify_user_push(
+        user_id, "Premium Aktif! 👑",
+        "Akun Anda telah di-upgrade ke Premium oleh admin. Semua batasan kini terbuka.",
+    ))
     return {"ok": True, "premium_until": until}
 
 
@@ -985,6 +998,10 @@ async def admin_approve_request(req_id: str, admin: dict = Depends(require_admin
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
+    asyncio.create_task(notify_user_push(
+        req["user_id"], "Premium Aktif! 👑",
+        "Selamat! Upgrade Premium Anda telah disetujui. Semua batasan kini terbuka.",
+    ))
     return {"ok": True, "premium_until": until}
 
 
@@ -1122,6 +1139,16 @@ async def _push_to_subs(subs: list, payload: dict):
         if gone:
             await db.push_subscriptions.delete_one({"endpoint": sub["endpoint"]})
     return sent
+
+
+async def notify_user_push(user_id: str, title: str, body: str, url: str = "/"):
+    """Send a push notification to all of a user's subscribed devices (best-effort)."""
+    try:
+        subs = await db.push_subscriptions.find({"user_id": user_id}, {"_id": 0}).to_list(20)
+        if subs:
+            await _push_to_subs(subs, {"title": title, "body": body, "url": url})
+    except Exception as e:
+        logging.warning("notify_user_push failed for %s: %s", user_id, str(e))
 
 
 @api.post("/push/test")
