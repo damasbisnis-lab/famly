@@ -803,6 +803,7 @@ async def request_upgrade(
             "approved_at": None, "approved_by": None,
         }
         await db.upgrade_requests.insert_one(req_doc)
+        req_doc.pop("_id", None)
     msg = (f"Halo Admin Famly,\nSaya ingin upgrade ke Premium.\n\nNama: {user['name']}\nEmail: {user['email']}\nKode: {req_doc['code']}\nNominal: Rp 49.000\n\nMohon info cara pembayaran. Terima kasih!")
     import urllib.parse
     wa_url = f"https://wa.me/{wa}?text={urllib.parse.quote(msg)}"

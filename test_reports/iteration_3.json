@@ -1,0 +1,47 @@
+{
+  "summary": "Backend testing for WhatsApp manual upgrade flow + regression. 24/24 pytest tests PASS. Fixed one critical MongoDB ObjectId serialization bug in /api/payments/request-upgrade.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/payments/request-upgrade",
+        "issue": "First-call returned 500 (TypeError: ObjectId not iterable). insert_one mutated req_doc adding _id, causing FastAPI JSON serialization to fail. Idempotent 2nd call worked because it re-fetched without _id. FIXED by adding req_doc.pop('_id', None) after insert.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/payments/my-request",
+        "issue": "Duplicate function definition in server.py (lines 838-850). Second definition is dead code (no decorator) but creates code smell."
+      },
+      {
+        "endpoint": "POST /api/payments/request-upgrade",
+        "issue": "proof_image accepted as query param (not body) since no Pydantic model used. Inconsistent with upload-proof which uses body. Works but unusual API surface."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_famly_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Remove duplicate my_upgrade_request function definition at lines 847-850 of server.py",
+    "Consider moving proof_image in request-upgrade to a Pydantic body model for API consistency"
+  ],
+  "critical_code_review_comments": [
+    "Critical bug: insert_one mutating req_doc with ObjectId caused 500. Pattern repeats throughout codebase - any insert_one followed by returning the doc must pop _id. Audit other inserts.",
+    "Duplicate function definitions for /payments/my-request (harmless but confusing).",
+    "request-upgrade endpoint uses query param for proof_image instead of JSON body - inconsistent."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (one-line fix: pop _id after insert in request-upgrade)",
+    "/app/backend/tests/test_famly_backend.py (rewrote as comprehensive pytest suite)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend only requested)"},
+  "test_credentials": "admin@famly.id / admin123 (works). Test users use TEST_*@famlytest.com (note: .test TLD is reserved by Pydantic EmailStr and rejected).",
+  "seed_data_creation": "Test fixture creates ephemeral TEST_*@famlytest.com users plus families/expenses/tasks/upgrade-requests. Settings normalized to 6281234567890 / 6281299998888 during testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 24 backend tests pass. Verified: settings GET/PUT + phone normalization (08xx->62xx, strips + spaces dashes), request-upgrade (503 when empty, wa.me URL with code+name+email+Rp 49.000, idempotency), upload-proof (413 over 2.8MB, 404 no pending), my-request (no proof_image field, null when none), admin list/proof/approve/reject (approve grants 30d premium + creates payment_transactions with payment_status=manual_wa, double-approve 400, reject does NOT grant). All regression flows still pass.",
+  "rca of the issue": "RCA for /api/payments/request-upgrade 500: motor's insert_one mutates the inserted dict in place adding MongoDB-generated _id (ObjectId). The endpoint then returned that mutated dict, which FastAPI's JSON encoder cannot serialize (ObjectId has no __dict__). Reproduction: any first-time call by a new user. Mitigation applied: added req_doc.pop('_id', None) immediately after insert_one. Verified by re-running full pytest suite (24/24 pass)."
+}
