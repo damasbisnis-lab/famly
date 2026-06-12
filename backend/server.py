@@ -554,7 +554,7 @@ async def checkout_status(session_id: str, request: Request, user: dict = Depend
         return {
             "status": txn["status"],
             "payment_status": txn["payment_status"],
-            "amount_total": int(txn["amount"] * 100),
+            "amount_total": int(txn["amount"]),
             "currency": txn["currency"],
             "premium_granted": True,
         }
