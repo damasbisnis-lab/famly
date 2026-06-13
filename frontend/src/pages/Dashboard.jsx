@@ -126,6 +126,7 @@ export default function Dashboard() {
   const [taskAssignee, setTaskAssignee] = useState("");
   const [taskDue, setTaskDue] = useState("");
   const [taskTime, setTaskTime] = useState("");
+  const [taskRecurrence, setTaskRecurrence] = useState("none");
   const [taskView, setTaskView] = useState("list"); // 'list' | 'calendar'
   const [calMonth, setCalMonth] = useState(() => { const d=new Date(); return {y:d.getFullYear(), m:d.getMonth()}; });
   const [calSelected, setCalSelected] = useState(null);
@@ -195,14 +196,26 @@ export default function Dashboard() {
     e.preventDefault();
     setErr("");
     try {
-      await api.post("/tasks", { title: taskTitle, description: "", assigned_to: taskAssignee || null, due_date: taskDue || null, due_time: (taskDue && taskTime) ? taskTime : null });
-      setTaskTitle(""); setTaskAssignee(""); setTaskDue(""); setTaskTime("");
+      await api.post("/tasks", { title: taskTitle, description: "", assigned_to: taskAssignee || null, due_date: taskDue || null, due_time: (taskDue && taskTime) ? taskTime : null, recurrence: taskDue ? taskRecurrence : "none" });
+      setTaskTitle(""); setTaskAssignee(""); setTaskDue(""); setTaskTime(""); setTaskRecurrence("none");
       await loadAll();
     } catch (e2) { handleErr(e2); }
   };
 
   const toggleTask = async (id) => {
-    try { await api.patch(`/tasks/${id}/complete`); await loadAll(); }
+    try {
+      const { data } = await api.patch(`/tasks/${id}/complete`);
+      if (data.rescheduled) {
+        handleInfo(`Tugas berulang dijadwalkan ulang ke ${new Date(data.next_date).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})}`);
+      }
+      await loadAll();
+    }
+    catch (e) { handleErr(e); }
+  };
+
+  const deleteExpense = async (id) => {
+    if (!window.confirm("Hapus transaksi ini? Anda bisa menambahkannya kembali.")) return;
+    try { await api.delete(`/expenses/${id}`); await loadAll(); }
     catch (e) { handleErr(e); }
   };
 
@@ -375,9 +388,6 @@ export default function Dashboard() {
             </button>
           </div>
 
-          {/* Push notification reminders */}
-          <PushToggle />
-
           {/* Tabs */}
           <div className="flex gap-2 bg-stone-100 p-1 rounded-2xl">
             <button data-testid="tab-expenses" onClick={()=>setTab("expenses")} className={`flex-1 py-2 rounded-xl text-sm font-semibold ${tab==='expenses' ? 'bg-white shadow-sm':'text-stone-600'}`}>
@@ -435,7 +445,10 @@ export default function Dashboard() {
                       </div>
                       <div className="text-xs text-stone-500">{x.description || '—'} • {x.user_name}</div>
                     </div>
-                    <div className="font-bold" style={{color: x.type==='income' ? '#5F8E70' : '#F08C3F'}}>{x.type==='income'?'+':'-'} {formatIDR(x.amount)}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="font-bold" style={{color: x.type==='income' ? '#5F8E70' : '#F08C3F'}}>{x.type==='income'?'+':'-'} {formatIDR(x.amount)}</div>
+                      <button data-testid={`expense-delete-${x.id}`} onClick={()=>deleteExpense(x.id)} className="p-1 rounded hover:bg-red-50 text-red-400"><Trash2 size={14}/></button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -459,6 +472,13 @@ export default function Dashboard() {
                     <input data-testid="task-time-input" type="time" className="input-field" value={taskTime} onChange={(e)=>setTaskTime(e.target.value)} placeholder="Jam (opsional)" />
                     <span className="text-xs text-stone-500 whitespace-nowrap">Jam (opsional)</span>
                   </div>
+                )}
+                {taskDue && (
+                  <select data-testid="task-recurrence-select" className="input-field" value={taskRecurrence} onChange={(e)=>setTaskRecurrence(e.target.value)}>
+                    <option value="none">🔁 Tidak berulang</option>
+                    <option value="daily">🔁 Setiap hari</option>
+                    <option value="weekly">🔁 Setiap minggu</option>
+                  </select>
                 )}
                 <button data-testid="task-submit-btn" className="btn-primary w-full" type="submit"><Plus size={16} className="inline mr-1"/>Tambah Tugas</button>
               </form>
@@ -534,6 +554,7 @@ export default function Dashboard() {
                       <span className="flex-1">
                         <span className={t.completed ? 'line-through text-stone-400':'text-stone-800'}>{t.title}</span>
                         {t.assigned_to_name && <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full" style={{background:'rgba(47,122,125,0.12)',color:'#2F7A7D'}}>→ {t.assigned_to_name}</span>}
+                        {t.recurrence && t.recurrence !== 'none' && <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full" style={{background:'rgba(123,169,138,0.15)',color:'#5F8E70'}}>🔁 {t.recurrence==='daily'?'Harian':'Mingguan'}</span>}
                         {t.due_date && (() => {
                           const today = new Date().toISOString().slice(0,10);
                           const overdue = !t.completed && t.due_date < today;
@@ -567,6 +588,9 @@ export default function Dashboard() {
               <span className="font-semibold" style={{color:'#F08C3F'}}>→</span>
             </button>
           )}
+
+          {/* Reminder settings (bottom) */}
+          <PushToggle />
         </div>
       )}
 

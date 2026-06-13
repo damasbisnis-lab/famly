@@ -2,11 +2,22 @@ import { useEffect, useState } from "react";
 import api, { formatApiError } from "@/lib/api";
 import { Bell, BellOff, Send, Clock, Save } from "lucide-react";
 
-const TZ_OPTIONS = [
-  { value: "WIB", label: "WIB (Jakarta, Sumatra, Jawa)" },
-  { value: "WITA", label: "WITA (Bali, Sulawesi, Kalimantan)" },
-  { value: "WIT", label: "WIT (Maluku, Papua)" },
-];
+const TZ_LABELS = {
+  WIB: "WIB (Jakarta, Sumatra, Jawa)",
+  WITA: "WITA (Bali, Sulawesi, Kalimantan)",
+  WIT: "WIT (Maluku, Papua)",
+};
+
+function detectDeviceTz() {
+  try {
+    const offsetH = -new Date().getTimezoneOffset() / 60;
+    if (offsetH === 8) return "WITA";
+    if (offsetH === 9) return "WIT";
+    return "WIB";
+  } catch {
+    return "WIB";
+  }
+}
 
 const LEAD_OPTIONS = [
   { value: 0, label: "Tepat waktu" },
@@ -59,7 +70,14 @@ export function PushToggle() {
           api.get("/push/preferences"),
         ]);
         setSubscribed(s.data.subscribed);
-        if (p.data.preferences) setPrefs({ ...DEFAULT_PREFS, ...p.data.preferences });
+        const loaded = { ...DEFAULT_PREFS, ...(p.data.preferences || {}) };
+        const deviceTz = detectDeviceTz();
+        loaded.tz_label = deviceTz;
+        setPrefs(loaded);
+        // Auto-sync device timezone to backend if it differs from saved value
+        if (p.data.preferences && p.data.preferences.tz_label !== deviceTz) {
+          api.put("/push/preferences", { tz_label: deviceTz }).catch(() => {});
+        }
       } catch {
         /* ignore */
       }
@@ -229,20 +247,9 @@ export function PushToggle() {
 
       {/* Reminder settings */}
       <div className="mt-3 space-y-3 border-t border-stone-100 pt-3">
-        <div>
-          <label className="text-xs text-stone-600 block mb-1">Zona waktu Anda</label>
-          <select
-            data-testid="push-tz-select"
-            value={prefs.tz_label}
-            onChange={(e) => setPref("tz_label", e.target.value)}
-            className="input-field !py-2 text-sm"
-          >
-            {TZ_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+        <div className="text-xs text-stone-500" data-testid="push-tz-auto">
+          Zona waktu: <b className="text-stone-700">{TZ_LABELS[prefs.tz_label] || prefs.tz_label}</b>
+          <span className="text-stone-400"> · otomatis dari perangkat</span>
         </div>
 
         {/* Task reminders */}

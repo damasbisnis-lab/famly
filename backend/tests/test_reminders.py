@@ -3,7 +3,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from server import _shift_hm, _valid_hm, get_reminder_prefs, DEFAULT_REMINDER_PREFS
+from server import _shift_hm, _valid_hm, get_reminder_prefs, DEFAULT_REMINDER_PREFS, _next_occurrence
+
+
+def test_next_occurrence_daily():
+    # current due before today -> rolls forward to >= today
+    assert _next_occurrence("2026-06-01", "daily", "2026-06-13") == "2026-06-13"
+
+
+def test_next_occurrence_weekly_keeps_weekday():
+    # 2026-06-01 is a Monday; next Monday >= 2026-06-13 is 2026-06-15
+    assert _next_occurrence("2026-06-01", "weekly", "2026-06-13") == "2026-06-15"
+
+
+def test_next_occurrence_steps_once_when_today():
+    # completing today's weekly task -> next week
+    assert _next_occurrence("2026-06-15", "weekly", "2026-06-15") == "2026-06-22"
+    assert _next_occurrence("2026-06-15", "daily", "2026-06-15") == "2026-06-16"
 
 
 def test_shift_hm_basic():

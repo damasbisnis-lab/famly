@@ -37,6 +37,13 @@ Lanjutkan Famly: (1) Stripe Checkout asli untuk upgrade premium Rp 49.000/bln + 
 - [x] Indonesian UI throughout, IDR formatting (Rp 49.000)
 - [x] Testing: 25/25 backend pass, 12/12 frontend pass
 
+## Recurring Tasks + Delete Expense + Auto-TZ + Settings Relocated (2026-06-13)
+- [x] **Tugas berulang**: task `recurrence` (none/daily/weekly). Rolling single-task model — `complete_task` reschedules recurring task to next occurrence (not permanent done); `list_tasks` & ticker auto-advance overdue recurring tasks via `advance_recurring_tasks()`. UI: recurrence select (shown when date set) + 🔁 badge + reschedule toast.
+- [x] **Hapus transaksi**: `DELETE /api/expenses/{id}` + trash button on each expense row (so user can delete & re-input to "edit").
+- [x] **Zona waktu otomatis**: PushToggle detects device tz via offset (+7 WIB/+8 WITA/+9 WIT), removed tz selector, auto-syncs to backend on mount if changed. Read-only display.
+- [x] **Pengaturan pengingat dipindah ke card paling bawah** dashboard.
+- Tested: recurrence roll-forward & reschedule via curl ✓; expense delete ✓; UI render all testids ✓; 8 pytest pass.
+
 ## Flexible Reminders + Task Time + Welcome Banner (2026-06-12)
 - [x] Tasks now support optional `due_time` (HH:MM); shown in task list badge & form (time input appears when date set)
 - [x] Per-user reminder preferences (`reminder_prefs` on user): task_reminder_enabled, task_summary_time, task_lead_minutes, finance_reminder_enabled, finance_reminder_time, tz_label. Endpoints `GET/PUT /api/push/preferences`

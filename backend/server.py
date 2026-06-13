@@ -99,6 +99,7 @@ class TaskCreateReq(BaseModel):
     assigned_to: Optional[str] = None  # user_id of family member
     due_date: Optional[str] = None  # ISO date YYYY-MM-DD
     due_time: Optional[str] = None  # HH:MM (24h), optional
+    recurrence: str = Field(default="none")  # none | daily | weekly
 
 
 class CheckoutReq(BaseModel):
@@ -413,6 +414,33 @@ async def list_expenses(user: dict = Depends(get_current_user)):
 # ============================================================================
 # TASKS
 # ============================================================================
+def _next_occurrence(due_date: str, recurrence: str, not_before: str) -> str:
+    """Advance due_date by one recurrence step, then keep stepping until >= not_before."""
+    step = 1 if recurrence == "daily" else 7
+    d = datetime.strptime(due_date, "%Y-%m-%d").date() + timedelta(days=step)
+    nb = datetime.strptime(not_before, "%Y-%m-%d").date()
+    while d < nb:
+        d = d + timedelta(days=step)
+    return d.isoformat()
+
+
+async def advance_recurring_tasks(family_id: str, tz_label: str):
+    """Roll overdue recurring tasks forward to their next occurrence (idempotent)."""
+    zone = TIMEZONES.get(tz_label, "Asia/Jakarta")
+    today = datetime.now(ZoneInfo(zone)).strftime("%Y-%m-%d")
+    tasks = await db.tasks.find(
+        {"family_id": family_id, "recurrence": {"$in": ["daily", "weekly"]},
+         "completed": False, "due_date": {"$ne": None, "$lt": today}},
+        {"_id": 0, "id": 1, "due_date": 1, "recurrence": 1},
+    ).to_list(500)
+    for t in tasks:
+        next_d = _next_occurrence(t["due_date"], t["recurrence"], today)
+        await db.tasks.update_one(
+            {"id": t["id"], "due_date": t["due_date"]},
+            {"$set": {"due_date": next_d, "notified_users": []}},
+        )
+
+
 @api.post("/tasks")
 async def create_task(req: TaskCreateReq, user: dict = Depends(require_active_user)):
     if not user.get("family_id"):
@@ -438,6 +466,9 @@ async def create_task(req: TaskCreateReq, user: dict = Depends(require_active_us
         member = await db.users.find_one({"id": req.assigned_to, "family_id": family_id}, {"_id": 0, "name": 1, "id": 1})
         if member:
             assignee_name = member["name"]
+    recurrence = req.recurrence if req.recurrence in ("none", "daily", "weekly") else "none"
+    if not req.due_date:
+        recurrence = "none"  # recurrence requires a due date
     doc = {
         "id": task_id,
         "family_id": family_id,
@@ -449,6 +480,8 @@ async def create_task(req: TaskCreateReq, user: dict = Depends(require_active_us
         "assigned_to_name": assignee_name,
         "due_date": req.due_date or None,
         "due_time": (req.due_time or None) if req.due_date else None,
+        "recurrence": recurrence,
+        "last_done_date": None,
         "completed": False,
         "notified_users": [],
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -463,6 +496,8 @@ async def create_task(req: TaskCreateReq, user: dict = Depends(require_active_us
 async def list_tasks(user: dict = Depends(get_current_user)):
     if not user.get("family_id"):
         return {"tasks": []}
+    # Roll any overdue recurring tasks forward before returning
+    await advance_recurring_tasks(user["family_id"], get_reminder_prefs(user)["tz_label"])
     items = (
         await db.tasks.find({"family_id": user["family_id"]}, {"_id": 0})
         .sort("created_at", -1)
@@ -476,6 +511,22 @@ async def complete_task(task_id: str, user: dict = Depends(require_active_user))
     task = await db.tasks.find_one({"id": task_id}, {"_id": 0})
     if not task or task["family_id"] != user.get("family_id"):
         raise HTTPException(status_code=404, detail="Tugas tidak ditemukan")
+
+    recurrence = task.get("recurrence", "none")
+    # Recurring task: instead of completing permanently, roll to next occurrence
+    if recurrence in ("daily", "weekly") and not task.get("completed", False):
+        zone = TIMEZONES.get(get_reminder_prefs(user)["tz_label"], "Asia/Jakarta")
+        today = datetime.now(ZoneInfo(zone)).strftime("%Y-%m-%d")
+        base = task.get("due_date") or today
+        next_d = _next_occurrence(base, recurrence, today)
+        await db.tasks.update_one(
+            {"id": task_id},
+            {"$set": {"due_date": next_d, "completed": False, "completed_at": None,
+                      "notified_users": [], "last_done_date": today}},
+        )
+        task["due_date"] = next_d
+        return {"task": task, "rescheduled": True, "next_date": next_d}
+
     new_completed = not task.get("completed", False)
     await db.tasks.update_one(
         {"id": task_id},
@@ -483,6 +534,15 @@ async def complete_task(task_id: str, user: dict = Depends(require_active_user))
     )
     task["completed"] = new_completed
     return {"task": task}
+
+
+@api.delete("/expenses/{expense_id}")
+async def delete_expense(expense_id: str, user: dict = Depends(require_active_user)):
+    exp = await db.expenses.find_one({"id": expense_id})
+    if not exp or exp.get("family_id") != user.get("family_id"):
+        raise HTTPException(status_code=404, detail="Transaksi tidak ditemukan")
+    await db.expenses.delete_one({"id": expense_id})
+    return {"ok": True}
 
 
 @api.delete("/tasks/{task_id}")
@@ -1254,6 +1314,7 @@ async def reminder_tick():
     except Exception as e:
         logging.warning("reminder_tick distinct failed: %s", str(e))
         return
+    advanced_families = set()
     for uid in user_ids:
         u = await db.users.find_one({"id": uid}, {"_id": 0})
         if not u or not u.get("family_id"):
@@ -1265,6 +1326,11 @@ async def reminder_tick():
         cur = now_local.strftime("%H:%M")
         fam = u["family_id"]
         mine = {"$or": [{"assigned_to": uid}, {"assigned_to": None}]}
+
+        # Roll overdue recurring tasks forward (idempotent, once per family per tick)
+        if fam not in advanced_families:
+            await advance_recurring_tasks(fam, prefs["tz_label"])
+            advanced_families.add(fam)
 
         # 1) Daily task summary (all-day tasks due today, no specific time)
         if prefs["task_reminder_enabled"] and cur == prefs["task_summary_time"]:
