@@ -477,19 +477,26 @@ export default function Dashboard() {
                     <option key={m.id} value={m.id}>{m.name}{m.id===user.id?' (saya)':''}</option>
                   ))}
                 </select>
-                <input data-testid="task-due-input" type="date" className="input-field" value={taskDue} onChange={(e)=>setTaskDue(e.target.value)} />
+                <div>
+                  <label className="text-xs text-stone-500 mb-1 block">Tanggal jatuh tempo (opsional)</label>
+                  <input data-testid="task-due-input" type="date" className="input-field" value={taskDue} onChange={(e)=>setTaskDue(e.target.value)} />
+                </div>
                 {taskDue && (
-                  <div className="flex items-center gap-2">
-                    <input data-testid="task-time-input" type="time" className="input-field" value={taskTime} onChange={(e)=>setTaskTime(e.target.value)} placeholder="Jam (opsional)" />
-                    <span className="text-xs text-stone-500 whitespace-nowrap">Jam (opsional)</span>
+                  <div>
+                    <label className="text-xs text-stone-500 mb-1 block">Jam pengingat (opsional)</label>
+                    <input data-testid="task-time-input" type="time" className="input-field" value={taskTime} onChange={(e)=>setTaskTime(e.target.value)} />
+                    <p className="text-[11px] text-stone-400 mt-1">Kosongkan jika tugas tidak terikat jam tertentu.</p>
                   </div>
                 )}
                 {taskDue && (
-                  <select data-testid="task-recurrence-select" className="input-field" value={taskRecurrence} onChange={(e)=>setTaskRecurrence(e.target.value)}>
-                    <option value="none">🔁 Tidak berulang</option>
-                    <option value="daily">🔁 Setiap hari</option>
-                    <option value="weekly">🔁 Setiap minggu</option>
-                  </select>
+                  <div>
+                    <label className="text-xs text-stone-500 mb-1 block">Pengulangan</label>
+                    <select data-testid="task-recurrence-select" className="input-field" value={taskRecurrence} onChange={(e)=>setTaskRecurrence(e.target.value)}>
+                      <option value="none">🔁 Tidak berulang</option>
+                      <option value="daily">🔁 Setiap hari</option>
+                      <option value="weekly">🔁 Setiap minggu</option>
+                    </select>
+                  </div>
                 )}
                 <button data-testid="task-submit-btn" className="btn-primary w-full" type="submit"><Plus size={16} className="inline mr-1"/>Tambah Tugas</button>
               </form>
