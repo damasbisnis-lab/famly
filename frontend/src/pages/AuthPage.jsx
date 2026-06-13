@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { formatApiError } from "@/lib/api";
 
 export default function AuthPage({ mode = "login" }) {
   const navigate = useNavigate();
   const { login, register } = useAuth();
+  const [searchParams] = useSearchParams();
+  const refCode = searchParams.get("ref");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -21,7 +23,7 @@ export default function AuthPage({ mode = "login" }) {
     try {
       const u = isLogin
         ? await login(email, password)
-        : await register(email, password, name);
+        : await register(email, password, name, refCode);
       if (u.role === "admin") navigate("/admin");
       else navigate("/app");
     } catch (e2) {
@@ -47,6 +49,12 @@ export default function AuthPage({ mode = "login" }) {
             ? "Kelola keluarga, keuangan, dan tugas dalam satu tempat."
             : "Atur keuangan dan tugas keluarga bersama-sama."}
         </p>
+
+        {!isLogin && refCode && (
+          <div data-testid="referral-invite-note" className="mb-5 text-sm rounded-xl p-3 border" style={{background:'rgba(240,140,63,0.08)', borderColor:'rgba(240,140,63,0.3)', color:'#B9651F'}}>
+            🎉 Kamu diundang teman! Daftar dan nikmati Famly bersama keluarga.
+          </div>
+        )}
 
         <form onSubmit={submit} className="space-y-4">
           {!isLogin && (

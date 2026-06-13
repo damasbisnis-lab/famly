@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { PushToggle } from "@/components/PushToggle";
 import { InstallPWA } from "@/components/InstallPWA";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
+import { ReferralCard } from "@/components/ReferralCard";
 import {
   Plus, Receipt, ListChecks, Crown, LogOut, Copy, Trash2, Check, Sparkles, ShieldAlert
 } from "lucide-react";
@@ -387,6 +388,9 @@ export default function Dashboard() {
               <Plus size={14}/> Ajak Anggota via WhatsApp
             </button>
           </div>
+
+          {/* Referral program */}
+          <ReferralCard onInfo={handleInfo} />
 
           {/* Tabs */}
           <div className="flex gap-2 bg-stone-100 p-1 rounded-2xl">

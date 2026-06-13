@@ -37,6 +37,13 @@ Lanjutkan Famly: (1) Stripe Checkout asli untuk upgrade premium Rp 49.000/bln + 
 - [x] Indonesian UI throughout, IDR formatting (Rp 49.000)
 - [x] Testing: 25/25 backend pass, 12/12 frontend pass
 
+## Referral Program (2026-06-13)
+- [x] Tiap user punya `ref_code` unik + link `/register?ref=CODE`. Register menerima `ref_code` → set `referred_by` + buat record di koleksi `referrals` (status registered).
+- [x] **Reward**: saat user yang diundang BERHASIL purchase Premium (WhatsApp approve atau Stripe paid), pengundang dapat **+30 hari** (`reward_referral_if_any`), sekali per referee (idempotent via referrals.status). Pengundang dapat push "Referral Berhasil 🎁".
+- [x] Endpoint `GET /api/referral/me` (ref_code, link, total_invited, total_converted, months_earned, recent).
+- [x] Frontend: `ReferralCard` (statistik + copy link + share WhatsApp) di dashboard; banner undangan di halaman register saat ada `?ref=`. AuthContext.register kirim ref_code.
+- Tested: reward end-to-end via curl (referrer +1 bln, stats invited/converted/months) ✓; UI card & invite note ✓.
+
 ## Recurring Tasks + Delete Expense + Auto-TZ + Settings Relocated (2026-06-13)
 - [x] **Tugas berulang**: task `recurrence` (none/daily/weekly). Rolling single-task model — `complete_task` reschedules recurring task to next occurrence (not permanent done); `list_tasks` & ticker auto-advance overdue recurring tasks via `advance_recurring_tasks()`. UI: recurrence select (shown when date set) + 🔁 badge + reschedule toast.
 - [x] **Hapus transaksi**: `DELETE /api/expenses/{id}` + trash button on each expense row (so user can delete & re-input to "edit").

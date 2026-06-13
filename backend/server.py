@@ -71,6 +71,7 @@ class RegisterReq(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
     name: str = Field(min_length=1, max_length=80)
+    ref_code: Optional[str] = None
 
 
 class LoginReq(BaseModel):
@@ -227,6 +228,14 @@ async def register(req: RegisterReq):
     if existing:
         raise HTTPException(status_code=400, detail="Email sudah terdaftar")
     user_id = str(uuid.uuid4())
+
+    # Referral attribution
+    referred_by = None
+    if req.ref_code:
+        referrer = await db.users.find_one({"ref_code": req.ref_code.upper().strip()}, {"_id": 0})
+        if referrer and referrer["id"] != user_id and referrer.get("role") != "admin":
+            referred_by = referrer["id"]
+
     doc = {
         "id": user_id,
         "email": email,
@@ -237,9 +246,22 @@ async def register(req: RegisterReq):
         "premium_until": None,
         "suspended": False,
         "family_id": None,
+        "ref_code": gen_invite_code(),
+        "referred_by": referred_by,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(doc)
+    if referred_by:
+        await db.referrals.insert_one({
+            "id": str(uuid.uuid4()),
+            "referrer_id": referred_by,
+            "referred_id": user_id,
+            "referred_email": email,
+            "referred_name": req.name.strip(),
+            "status": "registered",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "rewarded_at": None,
+        })
     token = create_token(user_id, email, "user")
     return {"access_token": token, "user": serialize_user(doc)}
 
@@ -640,6 +662,8 @@ async def _process_paid_session(session_id: str, payment_status: str, amount_tot
         update["premium_until"] = until
 
     await db.payment_transactions.update_one({"session_id": session_id}, {"$set": update})
+    if payment_status == "paid":
+        await reward_referral_if_any(txn["user_id"])
     return await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
 
 
@@ -1065,6 +1089,8 @@ async def admin_approve_request(req_id: str, admin: dict = Depends(require_admin
         req["user_id"], "Premium Aktif! 👑",
         "Selamat! Upgrade Premium Anda telah disetujui. Semua batasan kini terbuka.",
     ))
+    # Reward referrer (+1 month) if this user was referred
+    await reward_referral_if_any(req["user_id"])
     return {"ok": True, "premium_until": until}
 
 
@@ -1378,6 +1404,63 @@ async def reminder_tick():
 
 
 # ============================================================================
+# REFERRALS - share link; referrer gets +1 month when referee buys premium
+# ============================================================================
+async def reward_referral_if_any(referred_user_id: str):
+    """If this user was referred and not yet rewarded, grant referrer +30 days premium."""
+    rec = await db.referrals.find_one({"referred_id": referred_user_id})
+    if not rec or rec.get("status") == "rewarded":
+        return
+    referrer = await db.users.find_one({"id": rec["referrer_id"]}, {"_id": 0})
+    if not referrer:
+        return
+    now = datetime.now(timezone.utc)
+    base = now
+    cur = referrer.get("premium_until")
+    if cur:
+        try:
+            cur_dt = datetime.fromisoformat(cur)
+            if cur_dt > now:
+                base = cur_dt
+        except Exception:
+            pass
+    new_until = (base + timedelta(days=30)).isoformat()
+    await db.users.update_one(
+        {"id": referrer["id"]},
+        {"$set": {"is_premium": True, "premium_until": new_until, "suspended": False}},
+    )
+    await db.referrals.update_one(
+        {"id": rec["id"]},
+        {"$set": {"status": "rewarded", "rewarded_at": now.isoformat()}},
+    )
+    asyncio.create_task(notify_user_push(
+        referrer["id"], "Referral Berhasil! 🎁",
+        "Teman yang kamu ajak baru saja upgrade ke Premium. Kamu dapat +1 bulan langganan gratis!",
+    ))
+
+
+@api.get("/referral/me")
+async def referral_me(user: dict = Depends(get_current_user)):
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    ref_code = u.get("ref_code")
+    if not ref_code:
+        ref_code = gen_invite_code()
+        await db.users.update_one({"id": user["id"]}, {"$set": {"ref_code": ref_code}})
+    total = await db.referrals.count_documents({"referrer_id": user["id"]})
+    converted = await db.referrals.count_documents({"referrer_id": user["id"], "status": "rewarded"})
+    recent = await db.referrals.find(
+        {"referrer_id": user["id"]}, {"_id": 0, "referred_name": 1, "status": 1, "created_at": 1}
+    ).sort("created_at", -1).to_list(50)
+    return {
+        "ref_code": ref_code,
+        "total_invited": total,
+        "total_converted": converted,
+        "months_earned": converted,
+        "recent": recent,
+    }
+
+
+# ============================================================================
 # HEALTH
 # ============================================================================
 @api.get("/")
@@ -1420,6 +1503,9 @@ async def on_startup():
     await db.push_subscriptions.create_index("endpoint", unique=True)
     await db.push_subscriptions.create_index("user_id")
     await db.push_subscriptions.create_index("tz_label")
+    await db.users.create_index("ref_code")
+    await db.referrals.create_index("referrer_id")
+    await db.referrals.create_index("referred_id", unique=True)
 
     # Seed admin idempotently
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
