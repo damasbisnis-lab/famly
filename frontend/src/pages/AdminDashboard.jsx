@@ -421,7 +421,7 @@ export default function AdminDashboard() {
                 <div className="font-semibold text-sm flex items-center gap-2"><Crown size={15} color="#F08C3F"/> Harga Langganan Premium</div>
                 <div>
                   <label className="text-sm font-semibold block mb-1">Harga per bulan (Rp)</label>
-                  <input data-testid="settings-price-input" type="number" min="1" step="1000" className="input-field" placeholder="49000"
+                  <input data-testid="settings-price-input" type="number" min="1" step="1" className="input-field" placeholder="49000"
                     value={settings.premium_price} onChange={(e)=>setSettings({...settings, premium_price: e.target.value === "" ? "" : Number(e.target.value)})} required />
                   <p className="text-xs text-stone-500 mt-1">Harga yang dibayar user. Tampil di kartu langganan, MRR, dan pesan WhatsApp.</p>
                 </div>
@@ -433,7 +433,7 @@ export default function AdminDashboard() {
                 {settings.show_strikethrough && (
                   <div>
                     <label className="text-sm font-semibold block mb-1">Harga coret / harga asli (Rp)</label>
-                    <input data-testid="settings-original-price-input" type="number" min="0" step="1000" className="input-field" placeholder="59000"
+                    <input data-testid="settings-original-price-input" type="number" min="0" step="1" className="input-field" placeholder="59000"
                       value={settings.premium_original_price} onChange={(e)=>setSettings({...settings, premium_original_price: e.target.value === "" ? 0 : Number(e.target.value)})} />
                     <p className="text-xs text-stone-500 mt-1">Harus lebih besar dari harga per bulan agar tampil dicoret.</p>
                   </div>
