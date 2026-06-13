@@ -595,7 +595,7 @@ async def create_checkout_session(
     cancel_url = f"{origin}/payment/cancel"
 
     # SECURITY: amount + currency set on server only
-    amount = PREMIUM_PRICE_IDR
+    amount = await get_premium_price()
     currency = "idr"
     metadata = {
         "user_id": user["id"],
@@ -741,7 +741,8 @@ async def admin_stats(user: dict = Depends(require_admin)):
         "premium_until": {"$gt": now_iso},
     })
     suspended = await db.users.count_documents({"suspended": True})
-    mrr_idr = active_subs * PREMIUM_PRICE_IDR
+    price = await get_premium_price()
+    mrr_idr = active_subs * price
     # Total revenue from paid transactions
     paid_txns = await db.payment_transactions.find({"premium_granted": True}, {"_id": 0}).to_list(10000)
     total_revenue = sum(t.get("amount", 0) for t in paid_txns)
@@ -754,7 +755,7 @@ async def admin_stats(user: dict = Depends(require_admin)):
         "mrr_idr": mrr_idr,
         "total_revenue_idr": total_revenue,
         "total_paid_transactions": total_paid_count,
-        "premium_price_idr": PREMIUM_PRICE_IDR,
+        "premium_price_idr": price,
     }
 
 
@@ -797,13 +798,14 @@ async def admin_upgrade(user_id: str, admin: dict = Depends(require_admin)):
         {"id": user_id},
         {"$set": {"is_premium": True, "premium_until": until, "suspended": False}},
     )
+    price = await get_premium_price()
     # Log manual admin transaction
     await db.payment_transactions.insert_one({
         "id": str(uuid.uuid4()),
         "session_id": f"manual-{uuid.uuid4().hex[:12]}",
         "user_id": user_id,
         "user_email": target["email"],
-        "amount": PREMIUM_PRICE_IDR,
+        "amount": price,
         "currency": "idr",
         "package": "premium_monthly_manual",
         "metadata": {"granted_by_admin": admin["id"]},
@@ -939,21 +941,49 @@ async def admin_transactions(user: dict = Depends(require_admin)):
 # ============================================================================
 async def _get_settings() -> dict:
     s = await db.settings.find_one({"id": "global"}, {"_id": 0})
+    defaults = {
+        "id": "global", "admin_whatsapp": "", "bank_info": "",
+        "premium_price": PREMIUM_PRICE_IDR, "premium_original_price": 0, "show_strikethrough": False,
+    }
     if not s:
-        s = {"id": "global", "admin_whatsapp": "", "bank_info": ""}
-        await db.settings.insert_one(s)
+        await db.settings.insert_one({**defaults})
+        return defaults
+    for k, v in defaults.items():
+        s.setdefault(k, v)
     return s
+
+
+async def get_premium_price() -> float:
+    s = await _get_settings()
+    try:
+        p = float(s.get("premium_price") or 0)
+        return p if p > 0 else PREMIUM_PRICE_IDR
+    except Exception:
+        return PREMIUM_PRICE_IDR
+
+
+def _fmt_idr(n) -> str:
+    return "Rp " + f"{int(n):,}".replace(",", ".")
 
 
 class SettingsUpdateReq(BaseModel):
     admin_whatsapp: str = Field(default="", max_length=20)
     bank_info: str = Field(default="", max_length=300)
+    premium_price: Optional[float] = None
+    premium_original_price: Optional[float] = None
+    show_strikethrough: Optional[bool] = None
 
 
 @api.get("/settings/public")
 async def public_settings():
     s = await _get_settings()
-    return {"admin_whatsapp": s.get("admin_whatsapp", ""), "bank_info": s.get("bank_info", "")}
+    return {
+        "admin_whatsapp": s.get("admin_whatsapp", ""),
+        "bank_info": s.get("bank_info", ""),
+        "premium_price": s.get("premium_price", PREMIUM_PRICE_IDR),
+        "premium_original_price": s.get("premium_original_price", 0),
+        "show_strikethrough": s.get("show_strikethrough", False),
+    }
 
 
 @api.get("/admin/settings")
@@ -968,11 +998,16 @@ async def admin_update_settings(req: SettingsUpdateReq, user: dict = Depends(req
         wa = wa[1:]
     if wa.startswith("0"):
         wa = "62" + wa[1:]  # Normalize Indonesian
-    await db.settings.update_one(
-        {"id": "global"},
-        {"$set": {"admin_whatsapp": wa, "bank_info": req.bank_info.strip()}},
-        upsert=True,
-    )
+    set_doc = {"admin_whatsapp": wa, "bank_info": req.bank_info.strip()}
+    if req.premium_price is not None:
+        if req.premium_price <= 0:
+            raise HTTPException(status_code=400, detail="Harga langganan harus lebih dari 0")
+        set_doc["premium_price"] = float(req.premium_price)
+    if req.premium_original_price is not None:
+        set_doc["premium_original_price"] = float(req.premium_original_price) if req.premium_original_price > 0 else 0
+    if req.show_strikethrough is not None:
+        set_doc["show_strikethrough"] = bool(req.show_strikethrough)
+    await db.settings.update_one({"id": "global"}, {"$set": set_doc}, upsert=True)
     return await _get_settings()
 
 
@@ -991,6 +1026,7 @@ async def request_upgrade(
     wa = settings.get("admin_whatsapp", "")
     if not wa:
         raise HTTPException(status_code=503, detail="Nomor WhatsApp admin belum diatur. Hubungi tim Famly.")
+    price = await get_premium_price()
     existing = await db.upgrade_requests.find_one({"user_id": user["id"], "status": "pending"}, {"_id": 0})
     if existing:
         if proof_image:
@@ -1002,14 +1038,14 @@ async def request_upgrade(
         req_doc = {
             "id": req_id, "code": req_id[:8].upper(),
             "user_id": user["id"], "user_email": user["email"], "user_name": user["name"],
-            "amount": PREMIUM_PRICE_IDR, "currency": "idr", "status": "pending",
+            "amount": price, "currency": "idr", "status": "pending",
             "proof_image": proof_image or "",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "approved_at": None, "approved_by": None,
         }
         await db.upgrade_requests.insert_one(req_doc)
         req_doc.pop("_id", None)
-    msg = (f"Halo Admin Famly,\nSaya ingin upgrade ke Premium.\n\nNama: {user['name']}\nEmail: {user['email']}\nKode: {req_doc['code']}\nNominal: Rp 49.000\n\nMohon info cara pembayaran. Terima kasih!")
+    msg = (f"Halo Admin Famly,\nSaya ingin upgrade ke Premium.\n\nNama: {user['name']}\nEmail: {user['email']}\nKode: {req_doc['code']}\nNominal: {_fmt_idr(req_doc.get('amount', price))}\n\nMohon info cara pembayaran. Terima kasih!")
     import urllib.parse
     wa_url = f"https://wa.me/{wa}?text={urllib.parse.quote(msg)}"
     return {"request": {k:v for k,v in req_doc.items() if k!='proof_image'}, "wa_url": wa_url, "admin_whatsapp": wa, "bank_info": settings.get("bank_info", "")}

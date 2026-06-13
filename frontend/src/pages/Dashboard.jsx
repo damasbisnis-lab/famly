@@ -34,8 +34,10 @@ function LimitBar({ label, used, max }) {
   );
 }
 
-function UpgradeModal({ open, onClose, onUpgrade, loading, proofFile, setProofFile }) {
+function UpgradeModal({ open, onClose, onUpgrade, loading, proofFile, setProofFile, settings }) {
   if (!open) return null;
+  const price = settings?.premium_price ?? 49000;
+  const showStrike = settings?.show_strikethrough && settings?.premium_original_price > price;
   const onFileChange = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -63,8 +65,11 @@ function UpgradeModal({ open, onClose, onUpgrade, loading, proofFile, setProofFi
             </div>
           </div>
           <p className="text-stone-600 mb-4 text-sm">Buka semua batasan untuk keluarga Anda.</p>
-          <div className="mb-6">
-            <span className="text-4xl font-bold" style={{fontFamily:'Manrope'}}>{formatIDR(49000)}</span>
+          <div className="mb-6 flex items-baseline gap-2 flex-wrap" data-testid="upgrade-price">
+            {showStrike && (
+              <span className="text-2xl text-stone-400 line-through" data-testid="upgrade-price-original">{formatIDR(settings.premium_original_price)}</span>
+            )}
+            <span className="text-4xl font-bold" style={{fontFamily:'Manrope'}}>{formatIDR(price)}</span>
             <span className="text-stone-500"> / bulan</span>
           </div>
           <ul className="space-y-2 text-sm text-stone-700 mb-6">
@@ -116,6 +121,7 @@ export default function Dashboard() {
   const [upgrading, setUpgrading] = useState(false);
   const [proofFile, setProofFile] = useState(null);
   const [myReq, setMyReq] = useState(null);
+  const [settings, setSettings] = useState(null);
 
   const [famName, setFamName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -144,6 +150,7 @@ export default function Dashboard() {
       setExpenses(e.data.expenses || []);
       setTasks(t.data.tasks || []);
       setMyReq(mr.data.request);
+      api.get("/settings/public").then(s=>setSettings(s.data)).catch(()=>{});
     } catch (e2) {
       setErr(formatApiError(e2));
     }
@@ -586,7 +593,12 @@ export default function Dashboard() {
                 </div>
                 <div className="text-left">
                   <div className="font-bold" style={{fontFamily:'Manrope'}}>Upgrade ke Premium</div>
-                  <div className="text-xs text-stone-500">{formatIDR(49000)} / bulan</div>
+                  <div className="text-xs text-stone-500">
+                    {settings?.show_strikethrough && settings?.premium_original_price > (settings?.premium_price ?? 49000) && (
+                      <span className="line-through mr-1">{formatIDR(settings.premium_original_price)}</span>
+                    )}
+                    {formatIDR(settings?.premium_price ?? 49000)} / bulan
+                  </div>
                 </div>
               </div>
               <span className="font-semibold" style={{color:'#F08C3F'}}>→</span>
@@ -598,7 +610,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <UpgradeModal open={showUpgrade} onClose={()=>setShowUpgrade(false)} onUpgrade={initiateUpgrade} loading={upgrading} proofFile={proofFile} setProofFile={setProofFile} />
+      <UpgradeModal open={showUpgrade} onClose={()=>setShowUpgrade(false)} onUpgrade={initiateUpgrade} loading={upgrading} proofFile={proofFile} setProofFile={setProofFile} settings={settings} />
     </div>
   );
 }

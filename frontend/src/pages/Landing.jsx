@@ -3,6 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Check, Users, Receipt, ListChecks, Crown, ShieldCheck, Share2 } from "lucide-react";
 import api, { formatIDR } from "@/lib/api";
 import { InstallPWA } from "@/components/InstallPWA";
+import { useEffect, useState } from "react";
 
 function FeatureCard({ icon: Icon, title, desc, color, bg }) {
   return (
@@ -18,6 +19,12 @@ function FeatureCard({ icon: Icon, title, desc, color, bg }) {
 
 export default function Landing() {
   const { user } = useAuth();
+  const [settings, setSettings] = useState(null);
+  useEffect(() => {
+    api.get("/settings/public").then((r) => setSettings(r.data)).catch(() => {});
+  }, []);
+  const price = settings?.premium_price ?? 49000;
+  const showStrike = settings?.show_strikethrough && settings?.premium_original_price > price;
   const goApp = user && user.role === "admin" ? "/admin" : "/app";
   const primaryLabel = user ? "Buka Dashboard" : "Daftar Gratis";
   const primaryHref = user ? goApp : "/register";
@@ -84,8 +91,11 @@ export default function Landing() {
               <Crown size={18} color="#F08C3F" />
               <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#F08C3F" }}>Famly Premium</span>
             </div>
-            <div className="flex items-baseline gap-1 mb-3">
-              <span className="text-3xl font-bold" style={{ fontFamily: "Manrope" }}>{formatIDR(49000)}</span>
+            <div className="flex items-baseline gap-2 mb-3 flex-wrap" data-testid="landing-price">
+              {showStrike && (
+                <span className="text-xl text-stone-400 line-through" data-testid="landing-price-original">{formatIDR(settings.premium_original_price)}</span>
+              )}
+              <span className="text-3xl font-bold" style={{ fontFamily: "Manrope" }}>{formatIDR(price)}</span>
               <span className="text-stone-500 text-sm">/ bulan</span>
             </div>
             <ul className="space-y-1.5 text-sm text-stone-700 mb-1">

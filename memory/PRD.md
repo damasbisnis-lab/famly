@@ -37,6 +37,13 @@ Lanjutkan Famly: (1) Stripe Checkout asli untuk upgrade premium Rp 49.000/bln + 
 - [x] Indonesian UI throughout, IDR formatting (Rp 49.000)
 - [x] Testing: 25/25 backend pass, 12/12 frontend pass
 
+## Admin Configurable Price + Strikethrough (2026-06-13)
+- [x] Super admin set harga langganan via Pengaturan (`premium_price`), opsi `show_strikethrough` + `premium_original_price` (harga coret/diskon). Backend `_get_settings`/`get_premium_price()` + `PUT /admin/settings`.
+- [x] Harga dinamis dipakai di: checkout Stripe, MRR (admin/stats), grant manual admin, request-upgrade (amount + pesan WhatsApp via `_fmt_idr`). `GET /settings/public` mengembalikan price fields.
+- [x] Kartu langganan (UpgradeModal, floating card, Landing pricing) tampilkan harga aktual + harga coret bila aktif. Admin form punya input harga + toggle + harga coret + live preview.
+- Tested: PUT settings (price 39k, orig 59k, strike) ✓; public settings & MRR reflect ✓; upgrade modal & landing show strikethrough ✓; admin form render ✓.
+- NOTE: PaymentPages success (Stripe-only, hidden flow) masih tampilkan Rp 49.000 statis — minor, tidak dipakai di flow WhatsApp aktif.
+
 ## Referral Program (2026-06-13)
 - [x] Tiap user punya `ref_code` unik + link `/register?ref=CODE`. Register menerima `ref_code` → set `referred_by` + buat record di koleksi `referrals` (status registered).
 - [x] **Reward**: saat user yang diundang BERHASIL purchase Premium (WhatsApp approve atau Stripe paid), pengundang dapat **+30 hari** (`reward_referral_if_any`), sekali per referee (idempotent via referrals.status). Pengundang dapat push "Referral Berhasil 🎁".

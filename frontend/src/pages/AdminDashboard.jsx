@@ -36,7 +36,7 @@ export default function AdminDashboard() {
   const [txns, setTxns] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [upgradeReqs, setUpgradeReqs] = useState([]);
-  const [settings, setSettings] = useState({admin_whatsapp: "", bank_info: ""});
+  const [settings, setSettings] = useState({admin_whatsapp: "", bank_info: "", premium_price: 49000, premium_original_price: 0, show_strikethrough: false});
   const [proofView, setProofView] = useState(null); // {code, image}
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
@@ -59,7 +59,7 @@ export default function AdminDashboard() {
       setTxns(t.data.transactions);
       setAnalytics(a.data);
       setUpgradeReqs(ur.data.requests);
-      setSettings({admin_whatsapp: st.data.admin_whatsapp || "", bank_info: st.data.bank_info || ""});
+      setSettings({admin_whatsapp: st.data.admin_whatsapp || "", bank_info: st.data.bank_info || "", premium_price: st.data.premium_price ?? 49000, premium_original_price: st.data.premium_original_price ?? 0, show_strikethrough: !!st.data.show_strikethrough});
     } catch (e) {
       setErr(formatApiError(e));
     } finally {
@@ -416,6 +416,40 @@ export default function AdminDashboard() {
                 <textarea data-testid="settings-bank-input" className="input-field" rows={3} placeholder="BCA 1234567890 a.n. Admin Famly"
                   value={settings.bank_info} onChange={(e)=>setSettings({...settings, bank_info:e.target.value})} />
               </div>
+
+              <div className="border-t border-stone-200 pt-4 space-y-4">
+                <div className="font-semibold text-sm flex items-center gap-2"><Crown size={15} color="#F08C3F"/> Harga Langganan Premium</div>
+                <div>
+                  <label className="text-sm font-semibold block mb-1">Harga per bulan (Rp)</label>
+                  <input data-testid="settings-price-input" type="number" min="1" step="1000" className="input-field" placeholder="49000"
+                    value={settings.premium_price} onChange={(e)=>setSettings({...settings, premium_price: e.target.value === "" ? "" : Number(e.target.value)})} required />
+                  <p className="text-xs text-stone-500 mt-1">Harga yang dibayar user. Tampil di kartu langganan, MRR, dan pesan WhatsApp.</p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input data-testid="settings-strike-toggle" type="checkbox" className="w-4 h-4 accent-[#F08C3F]"
+                    checked={settings.show_strikethrough} onChange={(e)=>setSettings({...settings, show_strikethrough: e.target.checked})} />
+                  <span className="text-sm font-semibold">Tampilkan harga coret (diskon)</span>
+                </label>
+                {settings.show_strikethrough && (
+                  <div>
+                    <label className="text-sm font-semibold block mb-1">Harga coret / harga asli (Rp)</label>
+                    <input data-testid="settings-original-price-input" type="number" min="0" step="1000" className="input-field" placeholder="59000"
+                      value={settings.premium_original_price} onChange={(e)=>setSettings({...settings, premium_original_price: e.target.value === "" ? 0 : Number(e.target.value)})} />
+                    <p className="text-xs text-stone-500 mt-1">Harus lebih besar dari harga per bulan agar tampil dicoret.</p>
+                  </div>
+                )}
+                <div className="p-3 rounded-xl bg-stone-50 text-sm" data-testid="settings-price-preview">
+                  <div className="font-semibold mb-1 text-xs text-stone-500">Preview kartu langganan:</div>
+                  <div className="flex items-baseline gap-2">
+                    {settings.show_strikethrough && Number(settings.premium_original_price) > Number(settings.premium_price) && (
+                      <span className="text-lg text-stone-400 line-through">{formatIDR(settings.premium_original_price)}</span>
+                    )}
+                    <span className="text-2xl font-bold">{formatIDR(settings.premium_price || 0)}</span>
+                    <span className="text-stone-500 text-sm">/ bulan</span>
+                  </div>
+                </div>
+              </div>
+
               <button data-testid="settings-save-btn" className="btn-primary" type="submit">Simpan Pengaturan</button>
             </form>
             {settings.admin_whatsapp && (
