@@ -567,6 +567,25 @@ async def delete_expense(expense_id: str, user: dict = Depends(require_active_us
     return {"ok": True}
 
 
+@api.put("/expenses/{expense_id}")
+async def update_expense(expense_id: str, req: ExpenseCreateReq, user: dict = Depends(require_active_user)):
+    exp = await db.expenses.find_one({"id": expense_id})
+    if not exp or exp.get("family_id") != user.get("family_id"):
+        raise HTTPException(status_code=404, detail="Transaksi tidak ditemukan")
+    txn_type = req.type if req.type in ("expense", "income") else "expense"
+    await db.expenses.update_one(
+        {"id": expense_id},
+        {"$set": {
+            "amount": req.amount,
+            "category": req.category.strip(),
+            "description": req.description.strip(),
+            "type": txn_type,
+        }},
+    )
+    doc = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+    return {"expense": doc}
+
+
 @api.delete("/tasks/{task_id}")
 async def delete_task(task_id: str, user: dict = Depends(require_active_user)):
     task = await db.tasks.find_one({"id": task_id})

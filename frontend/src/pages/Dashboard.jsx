@@ -7,7 +7,7 @@ import { InstallPWA } from "@/components/InstallPWA";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
 import { ReferralCard } from "@/components/ReferralCard";
 import {
-  Plus, Receipt, ListChecks, Crown, LogOut, Copy, Trash2, Check, Sparkles, ShieldAlert
+  Plus, Receipt, ListChecks, Crown, LogOut, Copy, Trash2, Check, Sparkles, ShieldAlert, Pencil
 } from "lucide-react";
 
 function LimitBar({ label, used, max }) {
@@ -129,6 +129,7 @@ export default function Dashboard() {
   const [expCat, setExpCat] = useState("");
   const [expDesc, setExpDesc] = useState("");
   const [expType, setExpType] = useState("expense");
+  const [editExp, setEditExp] = useState(null);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
   const [taskDue, setTaskDue] = useState("");
@@ -225,6 +226,22 @@ export default function Dashboard() {
     if (!window.confirm("Hapus transaksi ini? Anda bisa menambahkannya kembali.")) return;
     try { await api.delete(`/expenses/${id}`); await loadAll(); }
     catch (e) { handleErr(e); }
+  };
+
+  const saveEditExpense = async (e) => {
+    e.preventDefault();
+    setErr("");
+    try {
+      await api.put(`/expenses/${editExp.id}`, {
+        amount: parseFloat(editExp.amount),
+        category: editExp.category,
+        description: editExp.description || "",
+        type: editExp.type,
+      });
+      setEditExp(null);
+      await loadAll();
+      handleInfo("Transaksi diperbarui");
+    } catch (e2) { handleErr(e2); }
   };
 
   const deleteTask = async (id) => {
@@ -448,19 +465,36 @@ export default function Dashboard() {
               <div className="space-y-2" data-testid="expenses-list">
                 {expenses.length === 0 && <div className="text-sm text-stone-500">Belum ada transaksi.</div>}
                 {expenses.map((x) => (
-                  <div key={x.id} className="flex items-start justify-between py-2 border-b border-stone-100 last:border-0">
-                    <div>
-                      <div className="font-semibold flex items-center gap-1">
-                        {x.type==='income' && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{background:'rgba(123,169,138,0.18)',color:'#5F8E70'}}>+ Masuk</span>}
-                        {x.category}
+                  editExp && editExp.id === x.id ? (
+                    <form key={x.id} onSubmit={saveEditExpense} className="py-3 border-b border-stone-100 last:border-0 space-y-2" data-testid={`expense-edit-form-${x.id}`}>
+                      <div className="flex gap-2">
+                        <button type="button" data-testid="edit-type-expense-btn" onClick={()=>setEditExp({...editExp, type:'expense'})} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border ${editExp.type==='expense' ? 'bg-[#F08C3F] text-white border-[#F08C3F]':'border-stone-200 text-stone-600'}`}>Pengeluaran</button>
+                        <button type="button" data-testid="edit-type-income-btn" onClick={()=>setEditExp({...editExp, type:'income'})} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border ${editExp.type==='income' ? 'bg-[#7BA98A] text-white border-[#7BA98A]':'border-stone-200 text-stone-600'}`}>Pemasukan</button>
                       </div>
-                      <div className="text-xs text-stone-500">{x.description || '—'} • {x.user_name}</div>
+                      <input data-testid="edit-expense-amount" type="number" min="1" step="any" className="input-field !py-2" placeholder="Jumlah (Rp)" value={editExp.amount} onChange={(e)=>setEditExp({...editExp, amount:e.target.value})} required />
+                      <input data-testid="edit-expense-category" className="input-field !py-2" placeholder="Kategori" value={editExp.category} onChange={(e)=>setEditExp({...editExp, category:e.target.value})} required />
+                      <input data-testid="edit-expense-desc" className="input-field !py-2" placeholder="Deskripsi (opsional)" value={editExp.description} onChange={(e)=>setEditExp({...editExp, description:e.target.value})} />
+                      <div className="flex gap-2">
+                        <button type="submit" data-testid="edit-expense-save" className="btn-primary flex-1 !py-2 text-sm">Simpan</button>
+                        <button type="button" data-testid="edit-expense-cancel" onClick={()=>setEditExp(null)} className="btn-ghost flex-1 !py-2 text-sm">Batal</button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div key={x.id} className="flex items-start justify-between py-2 border-b border-stone-100 last:border-0">
+                      <div>
+                        <div className="font-semibold flex items-center gap-1">
+                          {x.type==='income' && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{background:'rgba(123,169,138,0.18)',color:'#5F8E70'}}>+ Masuk</span>}
+                          {x.category}
+                        </div>
+                        <div className="text-xs text-stone-500">{x.description || '—'} • {x.user_name}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-bold" style={{color: x.type==='income' ? '#5F8E70' : '#F08C3F'}}>{x.type==='income'?'+':'-'} {formatIDR(x.amount)}</div>
+                        <button data-testid={`expense-edit-${x.id}`} onClick={()=>setEditExp({id:x.id, amount:String(x.amount), category:x.category, description:x.description||'', type:x.type||'expense'})} className="p-1 rounded hover:bg-stone-100 text-stone-400"><Pencil size={14}/></button>
+                        <button data-testid={`expense-delete-${x.id}`} onClick={()=>deleteExpense(x.id)} className="p-1 rounded hover:bg-red-50 text-red-400"><Trash2 size={14}/></button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="font-bold" style={{color: x.type==='income' ? '#5F8E70' : '#F08C3F'}}>{x.type==='income'?'+':'-'} {formatIDR(x.amount)}</div>
-                      <button data-testid={`expense-delete-${x.id}`} onClick={()=>deleteExpense(x.id)} className="p-1 rounded hover:bg-red-50 text-red-400"><Trash2 size={14}/></button>
-                    </div>
-                  </div>
+                  )
                 ))}
               </div>
             </div>
